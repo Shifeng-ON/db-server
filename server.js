@@ -140,7 +140,7 @@ app.get('/',function(req,res){
           count ++
         }
       })
-   res.status(200).send("Current client count: " + JSON.stringify(count) + ', and cluster count: ' + Object.keys(clients).length +'\nsee clients obejct below\n '+ JSON.stringify(clients))
+   res.status(200).send("Current client count: " + JSON.stringify(count) + ', and Application count: ' + Object.keys(clients).length +'\nsee clients obejct below\n '+ JSON.stringify(clients))
 })
 
 app.get('/notify',function(req,res){
@@ -156,10 +156,10 @@ app.get('/notify',function(req,res){
 app.get('/notify/:clientID/:clientINDEX', function (req, res) {
   let id = req.params.clientID
   let index = req.params.clientINDEX
-  if (clientsWSs[id] != undefined) {
-    if (clientsWSs[id].application_instances[index] != undefined) {
-      if (clientsWSs[id].application_instances[index].readyState === WebSocket.OPEN) {
-        clientsWSs[id].application_instances[index].send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": '' }))
+  let ws = getClientWs(id,index)
+      if(ws!=undefined){
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": '' }))
         res.status(200).send('Successfully notify virus database update: ' + clients[id].application_name + '/' + index)
       } else {
         res.status(503).send('Failed to notify application: ' + clients[id].application_name + '/' + index + ', communication tunnel closed.')
@@ -167,9 +167,6 @@ app.get('/notify/:clientID/:clientINDEX', function (req, res) {
     }else{
       res.status(404).send('Application does not exist: ' + clients[id].application_name + '/' + index )
     }
-  }else{
-    res.status(404).send('Application does not exist: ' + clients[id].application_name + '/' + index )
-  }
 })
 
 /*everything below comes from node express, except server.listen*/
