@@ -16,6 +16,7 @@ let identifier = { application_id:appEnv.app.application_id,application_name:app
                     application_urls:appEnv.app.application_urls,instance_index:appEnv.app.instance_index,
                     instance_id:appEnv.app.instance_id}
 
+
 getClientWs = (id,index)=>{
    if (clientsWSs[id] != undefined) {
     if (clientsWSs[id].application_instances[index] != undefined) {
@@ -24,16 +25,41 @@ getClientWs = (id,index)=>{
   }
   return undefined
 }
+
 getClientIdentifier = (ws)=>{
   var msg = "unable to get client"
   var id = undefined
   var index = undefined
   var name = undefined
 
+  for (var innerID of  Object.keys(clientsWSs)){
+      for (var innerIndex of Object.keys(clientsWSs[innerID].application_instances)){
+          if(ws === clientsWSs[innerID].application_instances[innerIndex]){
+            id = innerID
+            index = innerIndex
+            name = clients[id].application_name
+          }
+      }
+  }
+
+  if(name != undefined && id != undefined && index != undefined){
+    msg = name  +'(' + id + ')/' + index 
+  }
+  return msg
+}
 var clients = {}
-    var msgMap = { "init": "init", "heartbeat": "heartbeat", "updating": "updating", "updated": "updated","updateError":"updateError" }
+var clientsWSs = {}
+var msgMap = { "init": "init", "reset": "reset", "heartbeat": "heartbeat", "update": "update" }
 // send msg through websocket 
 app.ws('/notify',function(ws,req){
+    ws.on('error',(err)=>{
+        let msg = getClientIdentifier(ws)
+        logger.error(processType,'client connection errr: '+ err + ', client: ' + msg)
+    })
+    ws.on('close',()=>{
+      let msg  = getClientIdentifier(ws)
+      logger.log(processType,"Client disconnected: " + msg)
+    })
       ws.on('message',  function(msg){
         // get obejct, extract index and id of the application instance
           let data = JSON.parse(msg)
@@ -41,52 +67,67 @@ app.ws('/notify',function(ws,req){
           let id = data.identifier.application_id
           // determine datatype
           switch(data.type){
+            // registration
             case msgMap['init']:
+                 var firstTime = true
+                 var type = msgMap['init']
+                 var msg = "Connection established"
                   // create a entry for this application 
                    if(clients[id] == undefined){
-                      clients[id] = {}
-    
+                      clients[id] = {application_instances:{}}
+                      clientsWSs[id] = {application_instances:{}}
                    }
-                   // adding application name and urls
-                   clients[id].application_name = data.identifier.application_name
-                   clients[id].application_urls = data.identifier.application_urls
-                   // adding application instances detail
-                   if( clients[id].application_instances == undefined){
-                        clients[id].application_instances = {}
-                   }
-                   // get index, and if this instance is not registared, register it, with status unknown
-        
+                   // get index, and if this instance is not registared, register it
                    if(clients[id].application_instances[index] == undefined){
                       clients[id].application_instances[index] = {}
+                   }else{
+                     firstTime = false
                    }
-                   clients[id].application_instances[index].status = 'Unknown' 
-                   clients[id].application_instances[index].ws =  ws
-                   clients[id].application_instances[index].updating = false
-                   clients[id].application_instances[index].updatingError = false
-                   clients[id].application_instances[index].ws.send(JSON.stringify({"type":msgMap['init'],"identifier":identifier,"detail":''}))
-                  logger.log(processType,clients[id].application_name +' with id ' + id + ', instance ' + index + ' connected.' )    
+
+                   if(firstTime){
+                     // adding application name and urls and other instance status
+                    clients[id].application_name = data.identifier.application_name
+                    clients[id].application_urls = data.identifier.application_urls
+                    clients[id].application_instances[index].status = 'Unknown' 
+                    clients[id].application_instances[index].updating = false
+                    clients[id].application_instances[index].updatingError = false
+                    clientsWSs[id].application_instances[index] =  ws
+                   }else{
+                     // only need to change websocket
+                    clientsWSs[id].application_instances[index] =  ws
+                    type = msgMap['reset']
+                    msg = 'Conection reset'
+                   }
+                  logger.log(processType,msg +": " +clients[id].application_name +'(' + id + ')/' + index  )  
+                  if (clientsWSs[id].application_instances[index].readyState === WebSocket.OPEN) {
+                    clientsWSs[id].application_instances[index].send(JSON.stringify({"type":type,"identifier":identifier,"detail":''}))
+                  }else{
+                    logger.error("client websockt hang up immediately after connected." + clients[id].application_name +'(' + id + ')/' + index  ) 
+                  }
+                   
                   
             break
             // status update
             case msgMap['heartbeat']:
                    clients[id].application_instances[index].status = data.detail
-                   logger.debug(processType,clients[id].application_name +' with id ' + id + ', instance ' + index + ' giving heartbeat.')
+                   logger.debug(processType,"giving heartbeat: " + clients[id].application_name +'(' + id + ')/' + index)
             break
-            case msgMap['updating']:
-                  clients[id].application_instances[index].updating = data.detail 
-                  clients[id].application_instances[index].updatingError = false
-                  logger.debug(processType,clients[id].application_name +' with id ' + id + ', instance ' + index + ' is updating virus database.')
+            // virus database update
+            case msgMap['update']:
+                  var msg = ''
+                  clients[id].application_instances[index].updating = data.detail.updating
+                  clients[id].application_instances[index].updatingError = data.detail.updatingError
+                  if(data.detail.updating){
+                    msg =  "updating virus database"
+                  }else{
+                    if(data.detail.updatingError){
+                      msg = "Error updating virus database"
+                    }else{
+                      msg =" Successfully updated virus database"
+                    }
+                  }
+                  logger.debug(processType,msg + ": " + clients[id].application_name +'(' + id + ')/' + index)
             break 
-            case msgMap['updated']:
-                clients[id].application_instances[index].updating = data.detail
-                 clients[id].application_instances[index].updatingError = false
-                 logger.debug(processType,clients[id].application_name +' with id ' + id + ', instance ' + index + ' updated virus database.')
-            break
-            case msgMap['updateError']:
-                clients[id].application_instances[index].updating = data.detail
-                clients[id].application_instances[index].updatingError = true
-                logger.debug(processType,clients[id].application_name +' with id ' + id + ', instance ' + index + ' virus databased updating process error.')
-            break
             default:break
           }
       })
@@ -99,13 +140,13 @@ app.get('/',function(req,res){
           count ++
         }
       })
-   res.status(200).send("Current client count: " + JSON.stringify(count) + ', and cluster count: ' + Object.keys(clients).length)
+   res.status(200).send("Current client count: " + JSON.stringify(count) + ', and cluster count: ' + Object.keys(clients).length +'\nsee clients obejct below\n '+ JSON.stringify(clients))
 })
 
 app.get('/notify',function(req,res){
     wss.getWss().clients.forEach(function (client) {
       if(client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify({"type":msgMap['updating'],"identifier":identifier,"detail":true}))
+        client.send(JSON.stringify({"type":msgMap['update'],"identifier":identifier,"detail":''}))
       }
     });
   res.status(200).send('Successfully notify all connected clamav daemon to update their virus databases')
@@ -115,10 +156,10 @@ app.get('/notify',function(req,res){
 app.get('/notify/:clientID/:clientINDEX', function (req, res) {
   let id = req.params.clientID
   let index = req.params.clientINDEX
-  let ws = getClientWs(id,index)
-  if(ws != undefined){
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": '' }))
+  if (clientsWSs[id] != undefined) {
+    if (clientsWSs[id].application_instances[index] != undefined) {
+      if (clientsWSs[id].application_instances[index].readyState === WebSocket.OPEN) {
+        clientsWSs[id].application_instances[index].send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": '' }))
         res.status(200).send('Successfully notify virus database update: ' + clients[id].application_name + '/' + index)
       } else {
         res.status(503).send('Failed to notify application: ' + clients[id].application_name + '/' + index + ', communication tunnel closed.')
@@ -126,6 +167,9 @@ app.get('/notify/:clientID/:clientINDEX', function (req, res) {
     }else{
       res.status(404).send('Application does not exist: ' + clients[id].application_name + '/' + index )
     }
+  }else{
+    res.status(404).send('Application does not exist: ' + clients[id].application_name + '/' + index )
+  }
 })
 
 /*everything below comes from node express, except server.listen*/
