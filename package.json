@@ -6,15 +6,16 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "body-parser": "~1.15.1",
-    "cookie-parser": "~1.4.3",
-    "express": "~4.13.4",
-    "serve-favicon": "~2.3.0",
-    "express-ws":"3.0.0",
-    "cfenv":"1.0.4"
+    "basic-auth": "1.1.0",
+    "body-parser": "1.15.1",
+    "cfenv": "1.0.4",
+    "cookie-parser": "1.4.3",
+    "express": "4.13.4",
+    "express-ws": "3.0.0",
+    "serve-favicon": "2.3.0"
   },
-   "engines": {
+  "engines": {
     "node": "6.10.3",
     "npm": "3.10.10"
-  }	
+  }
 }
