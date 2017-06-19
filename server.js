@@ -12,34 +12,28 @@ var server = http.createServer(app);
 var wss = require('express-ws')(app,server);
 var logger = require('./logger.js');
 var processType ="Server";
+let identifier = { application_id:appEnv.app.application_id,application_name:appEnv.app.application_name,
+                    application_urls:appEnv.app.application_urls,instance_index:appEnv.app.instance_index,
+                    instance_id:appEnv.app.instance_id}
 
-// uncomment after placing your favicon in /public
-//app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(cookieParser());
+
 
 var clients = {}
-var msgMap=['init','status','action']
+    var msgMap = { "init": "init", "heartbeat": "heartbeat", "updating": "updating", "updated": "updated","updateError":"updateError" }
 // send msg through websocket 
 app.ws('/notify',function(ws,req){
-      let count = 0
-      wss.getWss().clients.forEach((client)=>{
-        if(client.readyState == WebSocket.OPEN){ 
-          count ++
-        }
-      })
-    logger.log(processType,"new client connected\ncurrent client count: " + count)
       ws.on('message',  function(msg){
+        // get obejct, extract index and id of the application instance
           let data = JSON.parse(msg)
           let index = data.identifier.instance_index
           let id = data.identifier.application_id
+          // determine datatype
           switch(data.type){
-            case msgMap[0]:
-      
+            case msgMap['init']:
                   // create a entry for this application 
                    if(clients[id] == undefined){
                       clients[id] = {}
+    
                    }
                    // adding application name and urls
                    clients[id].application_name = data.identifier.application_name
@@ -48,44 +42,72 @@ app.ws('/notify',function(ws,req){
                    if( clients[id].application_instances == undefined){
                         clients[id].application_instances = {}
                    }
-                   
                    // get index, and if this instance is not registared, register it, with status unknown
         
                    if(clients[id].application_instances[index] == undefined){
                       clients[id].application_instances[index] = {}
                    }
-                   clients[id].application_instances[index].status = 'Unknown'         
+                   clients[id].application_instances[index].status = 'Unknown' 
+                   clients[id].application_instances[index].ws =  ws
+                   clients[id].application_instances[index].updating = false
+                   clients[id].application_instances[index].updatingError = false
+                   clients[id].application_instances[index].ws.send(JSON.stringify({"type":msgMap['init'],"identifier":identifier,"detail":''}))
+                  logger.log(processType,clients[id].application_name +' with id ' + id + ', instance ' + index + ' connected.' )    
+                  
             break
-            case msgMap[1]:
+            // status update
+            case msgMap['heartbeat']:
                    clients[id].application_instances[index].status = data.detail
-                   console.log(data.detail)
+                   logger.debug(processType,clients[id].application_name +' with id ' + id + ', instance ' + index + ' giving heartbeat.')
             break
-            case msgMap[2]:
-
+            case msgMap['updating']:
+                  clients[id].application_instances[index].updating = data.detail 
+                  clients[id].application_instances[index].updatingError = false
+                  logger.debug(processType,clients[id].application_name +' with id ' + id + ', instance ' + index + ' is updating virus database.')
             break 
+            case msgMap['updated']:
+                clients[id].application_instances[index].updating = data.detail
+                 clients[id].application_instances[index].updatingError = false
+                 logger.debug(processType,clients[id].application_name +' with id ' + id + ', instance ' + index + ' updated virus database.')
+            break
+            case msgMap['updateError']:
+                clients[id].application_instances[index].updating = data.detail
+                clients[id].application_instances[index].updatingError = true
+                logger.debug(processType,clients[id].application_name +' with id ' + id + ', instance ' + index + ' virus databased updating process error.')
+            break
+            default:break
           }
-       
-        
       })
 });
 
 app.get('/',function(req,res){
-    wss.getWss().clients.forEach(function (client) {
-         if(client.readyState === WebSocket.OPEN) {
-        client.send('get status')
-      }
-    })
-   res.status(200).send(JSON.stringify(clients))
+       let count = 0
+      wss.getWss().clients.forEach((client)=>{
+        if(client.readyState == WebSocket.OPEN){ 
+          count ++
+        }
+      })
+   res.status(200).send("Current client count: " + JSON.stringify(count) + ', and cluster count: ' + Object.keys(clients).length)
 })
 
 app.get('/notify',function(req,res){
     wss.getWss().clients.forEach(function (client) {
       if(client.readyState === WebSocket.OPEN) {
-        client.send('update freshclam')
+        client.send(JSON.stringify({"type":msgMap['updating'],"identifier":identifier,"detail":true}))
       }
     });
-  res.status(200).send('done')
+  res.status(200).send('Successfully notify all connected clamav daemon to update their virus databases')
 })
+
+
+
+/*everything below comes from node express, except server.listen*/
+
+// uncomment after placing your favicon in /public
+//app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(cookieParser());
 
 
 // catch 404 and forward to error handler
