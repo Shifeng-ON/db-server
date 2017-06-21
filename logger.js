@@ -5,7 +5,7 @@ module.exports = {
         if (message != undefined) {
             for (var piece of message.split('\n')) {
                 if (piece.length > 0) {
-                    console.log(JSON.stringify({ 'Process type': typeProcess, 'Log': piece, 'Severity': "Info", 'TimeStamp': (new Date()).toISOString() }))
+                    console.log(JSON.stringify({'Severity': "Info", 'Process type': typeProcess, 'Log': piece,  'TimeStamp': (new Date()).toISOString() }))
                 }
             }
         }
@@ -16,7 +16,7 @@ module.exports = {
         if (message != undefined) {
             for (var piece of message.split('\n')) {
                 if (piece.length > 0) {
-                    console.error(JSON.stringify({ 'Process type': typeProcess, 'Log': piece, 'Severity': "Error", 'TimeStamp': (new Date()).toISOString() }))
+                    console.error(JSON.stringify({ 'Severity': "Error", 'Process type': typeProcess, 'Log': piece, 'TimeStamp': (new Date()).toISOString() }))
                 }
             }
         }
@@ -26,7 +26,7 @@ module.exports = {
         if (message != undefined) {
             for (var piece of message.split('\n')) {
                 if (piece.length > 0) {
-                    console.error(JSON.stringify({ 'Process type': typeProcess, 'Log': piece, 'Severity': "Debug", 'TimeStamp': (new Date()).toISOString() }))
+                    console.error(JSON.stringify({'Severity': "Debug", 'Process type': typeProcess, 'Log': piece,  'TimeStamp': (new Date()).toISOString() }))
                 }
             }
         }

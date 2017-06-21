@@ -7,166 +7,200 @@ var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
 var app = express();
 var cfenv = require('cfenv'),
-	  appEnv = cfenv.getAppEnv();
+  appEnv = cfenv.getAppEnv();
 var server = http.createServer(app);
-var wss = require('express-ws')(app,server);
+var wss = require('express-ws')(app, server);
 var logger = require('./logger.js');
-var processType ="Server";
-let identifier = { application_id:appEnv.app.application_id,application_name:appEnv.app.application_name,
-                    application_urls:appEnv.app.application_urls,instance_index:appEnv.app.instance_index,
-                    instance_id:appEnv.app.instance_id}
+var processType = "Server";
+var config = require('./config.js')
+let identifier = {
+  application_id: appEnv.app.application_id, application_name: appEnv.app.application_name,
+  application_urls: appEnv.app.application_urls, instance_index: appEnv.app.instance_index,
+  instance_id: appEnv.app.instance_id
+}
 
+// variable init
+var clients = {}
+var clientsWSs = {}
+var msgMap = { "init": "init", "reset": "reset", "heartbeat": "heartbeat", "update": "update" }
 
-getClientWs = (id,index)=>{
-   if (clientsWSs[id] != undefined) {
+// send heart beat request to all clients
+sendHeartBeat = () => {
+  logger.debug(processType, "Request heartbeat")
+  wss.getWss().clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({ "type": msgMap['heartbeat'], "identifier": identifier, "detail": '' }))
+    }else{
+      let clientID = getClientIdentifier(client)
+      if(clientID!= undefined){
+        let id = clientID.id
+        let index= clientID.index
+        clients[id].application_instances[index].status = 'Unknown'
+        clients[id].application_instances[index].updating = false
+        clients[id].application_instances[index].updatingError = false
+      } 
+    }
+  })
+}
+//get client WS
+getClientWs = (id, index) => {
+  if (clientsWSs[id] != undefined) {
     if (clientsWSs[id].application_instances[index] != undefined) {
-          return  clientsWSs[id].application_instances[index]
+      return clientsWSs[id].application_instances[index]
     }
   }
   return undefined
 }
+// get clientID
+getClientIdentifier = (ws) => {
+  var client = undefined
 
-getClientIdentifier = (ws)=>{
-  var msg = "unable to get client"
-  var id = undefined
-  var index = undefined
-  var name = undefined
-
-  for (var innerID of  Object.keys(clientsWSs)){
-      for (var innerIndex of Object.keys(clientsWSs[innerID].application_instances)){
-          if(ws === clientsWSs[innerID].application_instances[innerIndex]){
-            id = innerID
-            index = innerIndex
-            name = clients[id].application_name
-          }
+  for (var innerID of Object.keys(clientsWSs)) {
+    for (var innerIndex of Object.keys(clientsWSs[innerID].application_instances)) {
+      if (ws === clientsWSs[innerID].application_instances[innerIndex]) {
+        client = {"id":innerID,"index":innerIndex,"name":clients[innerID].application_name }
       }
+    }
   }
-
-  if(name != undefined && id != undefined && index != undefined){
-    msg = name  +'(' + id + ')/' + index 
-  }
-  return msg
+  return client
 }
-var clients = {}
-var clientsWSs = {}
-var msgMap = { "init": "init", "reset": "reset", "heartbeat": "heartbeat", "update": "update" }
 // send msg through websocket 
-app.ws('/notify',function(ws,req){
-    ws.on('error',(err)=>{
-        let msg = getClientIdentifier(ws)
-        logger.error(processType,'client connection errr: '+ err + ', client: ' + msg)
-    })
-    ws.on('close',()=>{
-      let msg  = getClientIdentifier(ws)
-      logger.log(processType,"Client disconnected: " + msg)
-    })
-      ws.on('message',  function(msg){
-        // get obejct, extract index and id of the application instance
-          let data = JSON.parse(msg)
-          let index = data.identifier.instance_index
-          let id = data.identifier.application_id
-          // determine datatype
-          switch(data.type){
-            // registration
-            case msgMap['init']:
-                 var firstTime = true
-                 var type = msgMap['init']
-                 var msg = "Connection established"
-                  // create a entry for this application 
-                   if(clients[id] == undefined){
-                      clients[id] = {application_instances:{}}
-                      clientsWSs[id] = {application_instances:{}}
-                   }
-                   // get index, and if this instance is not registared, register it
-                   if(clients[id].application_instances[index] == undefined){
-                      clients[id].application_instances[index] = {}
-                   }else{
-                     firstTime = false
-                   }
+app.ws('/notify', function (ws, req) {
+  ws.on('error', (err) => {
+    var msg = "unable to get client"
+    var client = getClientIdentifier(ws)
+    if(client != undefined){
+          msg = client.name + '(' + client.id + ')/' + client.index
+    }
+    logger.error(processType, 'client connection errr: ' + err + ', client: ' + msg)
+  })
+  ws.on('close', () => {
+    var msg = "unable to get client"
+    var client = getClientIdentifier(ws)
+    if(client != undefined){
+          msg = client.name + '(' + client.id + ')/' + client.index
+    }
+    logger.log(processType, "Client disconnected: " + msg)
+  })
+  ws.on('message', function (msg) {
+    // get obejct, extract index and id of the application instance
+    let data = JSON.parse(msg)
+    let index = data.identifier.instance_index
+    let id = data.identifier.application_id
+    // determine datatype
+    switch (data.type) {
+      // registration
+      case msgMap['init']:
+        var firstTime = true
+        var type = msgMap['init']
+        var msg = "Connection established"
+        // create a entry for this application 
+        if (clients[id] == undefined) {
+          clients[id] = { application_instances: {} }
+          clientsWSs[id] = { application_instances: {} }
+        }
+        // get index, and if this instance is not registared, register it
+        if (clients[id].application_instances[index] == undefined) {
+          clients[id].application_instances[index] = {}
+        } else {
+          firstTime = false
+        }
 
-                   if(firstTime){
-                     // adding application name and urls and other instance status
-                    clients[id].application_name = data.identifier.application_name
-                    clients[id].application_urls = data.identifier.application_urls
-                    clients[id].application_instances[index].status = 'Unknown' 
-                    clients[id].application_instances[index].updating = false
-                    clients[id].application_instances[index].updatingError = false
-                    clientsWSs[id].application_instances[index] =  ws
-                   }else{
-                     // only need to change websocket
-                    clientsWSs[id].application_instances[index] =  ws
-                    type = msgMap['reset']
-                    msg = 'Conection reset'
-                   }
-                  logger.log(processType,msg +": " +clients[id].application_name +'(' + id + ')/' + index  )  
-                  if (clientsWSs[id].application_instances[index].readyState === WebSocket.OPEN) {
-                    clientsWSs[id].application_instances[index].send(JSON.stringify({"type":type,"identifier":identifier,"detail":''}))
-                  }else{
-                    logger.error("client websockt hang up immediately after connected." + clients[id].application_name +'(' + id + ')/' + index  ) 
-                  }
-                   
-                  
-            break
-            // status update
-            case msgMap['heartbeat']:
-                   clients[id].application_instances[index].status = data.detail
-                   logger.debug(processType,"giving heartbeat: " + clients[id].application_name +'(' + id + ')/' + index)
-            break
-            // virus database update
-            case msgMap['update']:
-                  var msg = ''
-                  clients[id].application_instances[index].updating = data.detail.updating
-                  clients[id].application_instances[index].updatingError = data.detail.updatingError
-                  if(data.detail.updating){
-                    msg =  "updating virus database"
-                  }else{
-                    if(data.detail.updatingError){
-                      msg = "Error updating virus database"
-                    }else{
-                      msg =" Successfully updated virus database"
-                    }
-                  }
-                  logger.debug(processType,msg + ": " + clients[id].application_name +'(' + id + ')/' + index)
-            break 
-            default:break
+        if (firstTime) {
+          // adding application name and urls and other instance status
+          clients[id].application_name = data.identifier.application_name
+          clients[id].application_urls = data.identifier.application_urls
+          clients[id].application_instances[index].status = 'Unknown'
+          clients[id].application_instances[index].updating = false
+          clients[id].application_instances[index].updatingError = false
+          clientsWSs[id].application_instances[index] = ws
+        } else {
+          // only need to change websocket
+          clientsWSs[id].application_instances[index] = ws
+          type = msgMap['reset']
+          msg = 'Conection reset'
+        }
+        logger.log(processType, msg + ": " + clients[id].application_name + '(' + id + ')/' + index)
+        if (clientsWSs[id].application_instances[index].readyState === WebSocket.OPEN) {
+          clientsWSs[id].application_instances[index].send(JSON.stringify({ "type": type, "identifier": identifier, "detail": '' }))
+        } else {
+          logger.error("client websockt hang up immediately after connected." + clients[id].application_name + '(' + id + ')/' + index)
+        }
+
+
+        break
+      // status update
+      case msgMap['heartbeat']:
+        clients[id].application_instances[index].status = data.detail
+        logger.debug(processType, "Receiving heartbeat: " + clients[id].application_name + '(' + id + ')/' + index)
+        break
+      // virus database update
+      case msgMap['update']:
+        var msg = ''
+        clients[id].application_instances[index].updating = data.detail.updating
+        clients[id].application_instances[index].updatingError = data.detail.updatingError
+        if (data.detail.updating) {
+          msg = "updating virus database"
+        } else {
+          if (data.detail.updatingError) {
+            msg = "Error updating virus database"
+          } else {
+            msg = " Successfully updated virus database"
           }
-      })
+        }
+        logger.debug(processType, msg + ": " + clients[id].application_name + '(' + id + ')/' + index)
+        break
+      default: break
+    }
+  })
 });
 
-app.get('/',function(req,res){
-       let count = 0
-      wss.getWss().clients.forEach((client)=>{
-        if(client.readyState == WebSocket.OPEN){ 
-          count ++
-        }
-      })
-   res.status(200).send("Current client count: " + JSON.stringify(count) + ', and Application count: ' + Object.keys(clients).length +'\nsee clients obejct below\n '+ JSON.stringify(clients))
+// display clients controll interface
+app.get('/', function (req, res) {
+  let count = 0
+  wss.getWss().clients.forEach((client) => {
+    if (client.readyState == WebSocket.OPEN) {
+      count++
+    }
+  })
+  res.status(200).send("Current client count: " + JSON.stringify(count) + ', and Application count: ' + Object.keys(clients).length + '\nsee clients obejct below\n ' + JSON.stringify(clients))
 })
 
-app.get('/notify',function(req,res){
-    wss.getWss().clients.forEach(function (client) {
-      if(client.readyState === WebSocket.OPEN) {
-        client.send(JSON.stringify({"type":msgMap['update'],"identifier":identifier,"detail":''}))
-      }
-    });
+// requesting heart beat every defined seconds, can excced 100 seconds
+let maxHeartBeatInterval = 100
+let heartbeatInterval = Math.min(maxHeartBeatInterval,config.server.heartbeatInterval)
+setInterval(() => {
+  sendHeartBeat()
+
+}, heartbeatInterval * 1000)
+
+
+
+//notify update endpoint
+app.get('/notify', function (req, res) {
+  wss.getWss().clients.forEach(function (client) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": '' }))
+    }
+  });
   res.status(200).send('Successfully notify all connected clamav daemon to update their virus databases')
 })
 
-
+// notify update  endpoint for individual
 app.get('/notify/:clientID/:clientINDEX', function (req, res) {
   let id = req.params.clientID
   let index = req.params.clientINDEX
-  let ws = getClientWs(id,index)
-      if(ws!=undefined){
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": '' }))
-        res.status(200).send('Successfully notify virus database update: ' + clients[id].application_name + '/' + index)
-      } else {
-        res.status(503).send('Failed to notify application: ' + clients[id].application_name + '/' + index + ', communication tunnel closed.')
-      }
-    }else{
-      res.status(404).send('Application does not exist: ' + clients[id].application_name + '/' + index )
+  let ws = getClientWs(id, index)
+  if (ws != undefined) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": '' }))
+      res.status(200).send('Successfully notify virus database update: ' + clients[id].application_name + '/' + index)
+    } else {
+      res.status(503).send('Failed to notify application: ' + clients[id].application_name + '/' + index + ', communication tunnel closed.')
     }
+  } else {
+    res.status(404).send('Application does not exist: ' + clients[id].application_name + '/' + index)
+  }
 })
 
 /*everything below comes from node express, except server.listen*/
@@ -179,7 +213,7 @@ app.use(cookieParser());
 
 
 // catch 404 and forward to error handler
-app.use(function(req, res, next) {
+app.use(function (req, res, next) {
   var err = new Error('Not Found');
   err.status = 404;
   next(err);
@@ -191,18 +225,18 @@ app.use(function(req, res, next) {
 // development error handler
 // will print stacktrace
 if (app.get('env') === 'development') {
-  app.use(function(err, req, res, next) {
-   
+  app.use(function (err, req, res, next) {
+
     res.status(err.status || 500).send("<h1>Resource not found</h1>");
-    
+
   });
 }
 
 // production error handler
 // no stacktraces leaked to user
-app.use(function(err, req, res, next) {
-    
-     res.status(err.status || 500).send("<h1>Resource not found</h1>");
+app.use(function (err, req, res, next) {
+
+  res.status(err.status || 500).send("<h1>Resource not found</h1>");
 
 });
 
@@ -222,7 +256,7 @@ app.set('port', appEnv.port);
 server.on('error', onError);
 server.on('listening', onListening);
 server.listen(appEnv.port, appEnv.bind, function () {
-	logger.log(processType, 'Server started on port ' + appEnv.port)
+  logger.log(processType, 'Server started on port ' + appEnv.port)
 
 })
 
