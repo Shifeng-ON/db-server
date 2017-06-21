@@ -21,32 +21,53 @@ let identifier = {
 
 // variable init
 var clients = {}
-var clientsWSs = {}
 var msgMap = { "init": "init", "reset": "reset", "heartbeat": "heartbeat", "update": "update" }
+
 
 // send heart beat request to all clients
 sendHeartBeat = () => {
+  wss.clients.forEach((ws) =>{
+    if (ws.isAlive === false){
+      let clientID = getClientIdentifier(ws)
+       logger.debug(processType,"Terminating broken connection for :" + clients[clientID.id].application_name + '(' + clientID.id + ')/' + clientID.index)
+       return ws.terminate();
+    } 
+   
+    ws.isAlive = false;
+    ws.ping('', false, true);
+  }); 
   logger.debug(processType, "Request heartbeat")
-  wss.getWss().clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({ "type": msgMap['heartbeat'], "identifier": identifier, "detail": '' }))
-    }else{
-      let clientID = getClientIdentifier(client)
-      if(clientID!= undefined){
-        let id = clientID.id
-        let index= clientID.index
-        clients[id].application_instances[index].status = 'Unknown'
-        clients[id].application_instances[index].updating = false
-        clients[id].application_instances[index].updatingError = false
-      } 
+  for (var id of Object.keys(clients)){
+    for (var index of Object.keys(clients[id].application_instances)){
+      let clientWS = getClientWs(id,index)
+      if(clientWS.readyState === WebSocket.OPEN){
+         clientWS.send(JSON.stringify({ "type": msgMap['heartbeat'], "identifier": identifier, "detail": '' }))
+      }else{
+         clients[id].application_instances[index].status = 'Unknown'
+         clients[id].application_instances[index].updating = false
+         clients[id].application_instances[index].updatingError = false
+         logger.debug(processType, "Communication tunnel does not exist for : " + clients[id].application_name + '(' + id + ')/' + index)
+      }
     }
-  })
+  }
+  
 }
+
+// requesting heart beat every defined seconds, can excced 100 seconds
+let maxHeartBeatInterval = 100
+let minHeartBeatInterval = 10
+var heartbeatInterval = Math.min(maxHeartBeatInterval,config.server.heartbeatInterval)
+    heartbeatInterval = Math.max(minHeartBeatInterval,heartbeatInterval)
+setInterval(() => {
+  sendHeartBeat()
+
+}, heartbeatInterval * 1000)
+
 //get client WS
 getClientWs = (id, index) => {
-  if (clientsWSs[id] != undefined) {
-    if (clientsWSs[id].application_instances[index] != undefined) {
-      return clientsWSs[id].application_instances[index]
+  if (clients[id] != undefined) {
+    if (clients[id].application_instances[index] != undefined) {
+      return clients[id].application_instances[index].ws
     }
   }
   return undefined
@@ -55,9 +76,9 @@ getClientWs = (id, index) => {
 getClientIdentifier = (ws) => {
   var client = undefined
 
-  for (var innerID of Object.keys(clientsWSs)) {
-    for (var innerIndex of Object.keys(clientsWSs[innerID].application_instances)) {
-      if (ws === clientsWSs[innerID].application_instances[innerIndex]) {
+  for (var innerID of Object.keys(clients)) {
+    for (var innerIndex of Object.keys(clients[innerID].application_instances)) {
+      if (ws === clients[innerID].application_instances[innerIndex].ws) {
         client = {"id":innerID,"index":innerIndex,"name":clients[innerID].application_name }
       }
     }
@@ -66,19 +87,32 @@ getClientIdentifier = (ws) => {
 }
 // send msg through websocket 
 app.ws('/notify', function (ws, req) {
+  let heartbeat= ()=> {
+    this.isAlive = true;
+  }
+  
+  ws.isAlive = true;
+  ws.on('pong', heartbeat);
+
   ws.on('error', (err) => {
-    var msg = "unable to get client"
+    var msg = "Disconnected client is not registered"
     var client = getClientIdentifier(ws)
     if(client != undefined){
           msg = client.name + '(' + client.id + ')/' + client.index
+          clients[client.id].application_instances[client.index].status = 'Unknown'
+          clients[client.id].application_instances[client.index].updating = false
+          clients[client.id].application_instances[client.index].updatingError = false
     }
     logger.error(processType, 'client connection errr: ' + err + ', client: ' + msg)
   })
   ws.on('close', () => {
-    var msg = "unable to get client"
+    var msg = "Disconnected client is not registered"
     var client = getClientIdentifier(ws)
     if(client != undefined){
           msg = client.name + '(' + client.id + ')/' + client.index
+          clients[client.id].application_instances[client.index].status = 'Unknown'
+          clients[client.id].application_instances[client.index].updating = false
+          clients[client.id].application_instances[client.index].updatingError = false
     }
     logger.log(processType, "Client disconnected: " + msg)
   })
@@ -97,7 +131,6 @@ app.ws('/notify', function (ws, req) {
         // create a entry for this application 
         if (clients[id] == undefined) {
           clients[id] = { application_instances: {} }
-          clientsWSs[id] = { application_instances: {} }
         }
         // get index, and if this instance is not registared, register it
         if (clients[id].application_instances[index] == undefined) {
@@ -113,16 +146,16 @@ app.ws('/notify', function (ws, req) {
           clients[id].application_instances[index].status = 'Unknown'
           clients[id].application_instances[index].updating = false
           clients[id].application_instances[index].updatingError = false
-          clientsWSs[id].application_instances[index] = ws
+          clients[id].application_instances[index].ws = ws
         } else {
           // only need to change websocket
-          clientsWSs[id].application_instances[index] = ws
+          clients[id].application_instances[index].ws = ws
           type = msgMap['reset']
           msg = 'Conection reset'
         }
         logger.log(processType, msg + ": " + clients[id].application_name + '(' + id + ')/' + index)
-        if (clientsWSs[id].application_instances[index].readyState === WebSocket.OPEN) {
-          clientsWSs[id].application_instances[index].send(JSON.stringify({ "type": type, "identifier": identifier, "detail": '' }))
+        if (clients[id].application_instances[index].ws.readyState === WebSocket.OPEN) {
+          clients[id].application_instances[index].ws.send(JSON.stringify({ "type": type, "identifier": identifier, "detail": '' }))
         } else {
           logger.error("client websockt hang up immediately after connected." + clients[id].application_name + '(' + id + ')/' + index)
         }
@@ -159,20 +192,19 @@ app.ws('/notify', function (ws, req) {
 app.get('/', function (req, res) {
   let count = 0
   wss.getWss().clients.forEach((client) => {
-    if (client.readyState == WebSocket.OPEN) {
+       if(client.readyState === WebSocket.OPEN){
       count++
     }
+    
   })
-  res.status(200).send("Current client count: " + JSON.stringify(count) + ', and Application count: ' + Object.keys(clients).length + '\nsee clients obejct below\n ' + JSON.stringify(clients))
+  let replacer = (key,value)=>{
+    if(key == "ws"){
+      return undefined
+    }
+    return value
+  }
+  res.status(200).send("Current active client count: " + JSON.stringify(count) + ', and Application count: ' + Object.keys(clients).length + '\nsee clients obejct below\n ' + JSON.stringify(clients,replacer))
 })
-
-// requesting heart beat every defined seconds, can excced 100 seconds
-let maxHeartBeatInterval = 100
-let heartbeatInterval = Math.min(maxHeartBeatInterval,config.server.heartbeatInterval)
-setInterval(() => {
-  sendHeartBeat()
-
-}, heartbeatInterval * 1000)
 
 
 
@@ -196,7 +228,7 @@ app.get('/notify/:clientID/:clientINDEX', function (req, res) {
       ws.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": '' }))
       res.status(200).send('Successfully notify virus database update: ' + clients[id].application_name + '/' + index)
     } else {
-      res.status(503).send('Failed to notify application: ' + clients[id].application_name + '/' + index + ', communication tunnel closed.')
+      res.status(503).send('Failed to notify application: ' + clients[id].application_name + '/' + index + ', communication tunnel is not established.')
     }
   } else {
     res.status(404).send('Application does not exist: ' + clients[id].application_name + '/' + index)
