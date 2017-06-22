@@ -2,6 +2,7 @@ var http = require('http');
 var WebSocket = require('ws');
 var express = require('express');
 var path = require('path');
+var fs = require('fs');
 var favicon = require('serve-favicon');
 var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
@@ -26,38 +27,28 @@ var msgMap = { "init": "init", "reset": "reset", "heartbeat": "heartbeat", "upda
 
 // send heart beat request to all clients
 sendHeartBeat = () => {
-  wss.clients.forEach((ws) =>{
-    if (ws.isAlive === false){
-      let clientID = getClientIdentifier(ws)
-       logger.debug(processType,"Terminating broken connection for :" + clients[clientID.id].application_name + '(' + clientID.id + ')/' + clientID.index)
-       return ws.terminate();
-    } 
-   
-    ws.isAlive = false;
-    ws.ping('', false, true);
-  }); 
   logger.debug(processType, "Request heartbeat")
-  for (var id of Object.keys(clients)){
-    for (var index of Object.keys(clients[id].application_instances)){
-      let clientWS = getClientWs(id,index)
-      if(clientWS.readyState === WebSocket.OPEN){
-         clientWS.send(JSON.stringify({ "type": msgMap['heartbeat'], "identifier": identifier, "detail": '' }))
-      }else{
-         clients[id].application_instances[index].status = 'Unknown'
-         clients[id].application_instances[index].updating = false
-         clients[id].application_instances[index].updatingError = false
-         logger.debug(processType, "Communication tunnel does not exist for : " + clients[id].application_name + '(' + id + ')/' + index)
+  for (var id of Object.keys(clients)) {
+    for (var index of Object.keys(clients[id].application_instances)) {
+      let clientWS = getClientWs(id, index)
+      if (clientWS.readyState === WebSocket.OPEN) {
+        clientWS.send(JSON.stringify({ "type": msgMap['heartbeat'], "identifier": identifier, "detail": '' }))
+      } else {
+        clients[id].application_instances[index].status = 'unknown'
+        clients[id].application_instances[index].updating = false
+        clients[id].application_instances[index].updatingError = false
+        logger.debug(processType, "Communication tunnel does not exist for : " + clients[id].application_name + '(' + id + ')/' + index)
       }
     }
   }
-  
+
 }
 
 // requesting heart beat every defined seconds, can excced 100 seconds
 let maxHeartBeatInterval = 100
 let minHeartBeatInterval = 10
-var heartbeatInterval = Math.min(maxHeartBeatInterval,config.server.heartbeatInterval)
-    heartbeatInterval = Math.max(minHeartBeatInterval,heartbeatInterval)
+var heartbeatInterval = Math.min(maxHeartBeatInterval, config.server.heartbeatInterval)
+heartbeatInterval = Math.max(minHeartBeatInterval, heartbeatInterval)
 setInterval(() => {
   sendHeartBeat()
 
@@ -79,40 +70,34 @@ getClientIdentifier = (ws) => {
   for (var innerID of Object.keys(clients)) {
     for (var innerIndex of Object.keys(clients[innerID].application_instances)) {
       if (ws === clients[innerID].application_instances[innerIndex].ws) {
-        client = {"id":innerID,"index":innerIndex,"name":clients[innerID].application_name }
+        client = { "id": innerID, "index": innerIndex, "name": clients[innerID].application_name }
       }
     }
   }
   return client
 }
-// send msg through websocket 
+// websocket endpoint 
 app.ws('/notify', function (ws, req) {
-  let heartbeat= ()=> {
-    this.isAlive = true;
-  }
-  
-  ws.isAlive = true;
-  ws.on('pong', heartbeat);
 
   ws.on('error', (err) => {
     var msg = "Disconnected client is not registered"
     var client = getClientIdentifier(ws)
-    if(client != undefined){
-          msg = client.name + '(' + client.id + ')/' + client.index
-          clients[client.id].application_instances[client.index].status = 'Unknown'
-          clients[client.id].application_instances[client.index].updating = false
-          clients[client.id].application_instances[client.index].updatingError = false
+    if (client != undefined) {
+      msg = client.name + '(' + client.id + ')/' + client.index
+      clients[client.id].application_instances[client.index].status = 'unknown'
+      clients[client.id].application_instances[client.index].updating = false
+      clients[client.id].application_instances[client.index].updatingError = false
     }
     logger.error(processType, 'client connection errr: ' + err + ', client: ' + msg)
   })
   ws.on('close', () => {
     var msg = "Disconnected client is not registered"
     var client = getClientIdentifier(ws)
-    if(client != undefined){
-          msg = client.name + '(' + client.id + ')/' + client.index
-          clients[client.id].application_instances[client.index].status = 'Unknown'
-          clients[client.id].application_instances[client.index].updating = false
-          clients[client.id].application_instances[client.index].updatingError = false
+    if (client != undefined) {
+      msg = client.name + '(' + client.id + ')/' + client.index
+      clients[client.id].application_instances[client.index].status = 'unknown'
+      clients[client.id].application_instances[client.index].updating = false
+      clients[client.id].application_instances[client.index].updatingError = false
     }
     logger.log(processType, "Client disconnected: " + msg)
   })
@@ -143,7 +128,7 @@ app.ws('/notify', function (ws, req) {
           // adding application name and urls and other instance status
           clients[id].application_name = data.identifier.application_name
           clients[id].application_urls = data.identifier.application_urls
-          clients[id].application_instances[index].status = 'Unknown'
+          clients[id].application_instances[index].status = 'unknown'
           clients[id].application_instances[index].updating = false
           clients[id].application_instances[index].updatingError = false
           clients[id].application_instances[index].ws = ws
@@ -188,27 +173,58 @@ app.ws('/notify', function (ws, req) {
   })
 });
 
-// display clients controll interface
-app.get('/', function (req, res) {
-  let count = 0
-  wss.getWss().clients.forEach((client) => {
-       if(client.readyState === WebSocket.OPEN){
-      count++
-    }
-    
-  })
-  let replacer = (key,value)=>{
-    if(key == "ws"){
-      return undefined
-    }
-    return value
+// main endpoint
+app.get('/',function(req,res){
+  res.status(200).send("<h2>server is alive</h2>")
+})
+// monitor endpoint
+app.use('/utility', express.static(path.join(__dirname, 'public')))
+
+
+// JSONstringify replacer to avoid showing ws object
+let replacer = (key, value) => {
+  if (key == "ws") {
+    return undefined
   }
-  res.status(200).send("Current active client count: " + JSON.stringify(count) + ', and Application count: ' + Object.keys(clients).length + '\nsee clients obejct below\n ' + JSON.stringify(clients,replacer))
+  return value
+}
+
+
+// will retrieve all application infomation
+app.get('/info', function (req, res) {
+  res.status(200).send(JSON.stringify(clients, replacer))
+})
+
+// will retrieve all instance of this application id
+app.get('/info/:clientID', function (req, res) {
+  let id = req.params.clientID
+  var selectedClients = clients[id]
+  if (selectedClients == undefined) {
+    res.status(404).send("application with id: " + id+" can no be found.")
+  } else {
+    res.status(200).send(JSON.stringify(selectedClients, replacer))
+  }
+})
+// will retrieve only this instance with this application id
+app.get('/info/:clientID/:clientINDEX', function (req, res) {
+  let id = req.params.clientID
+  let index = req.params.clientINDEX
+  var selectedClients = clients[id]
+  if (selectedClients != undefined) {
+    if (selectedClients.application_instances[index] != undefined) {
+      res.status(200).send(JSON.stringify(selectedClients.application_instances[index], replacer))
+    } else {
+      res.status(404).send("application with id: " + id + ' at index: ' + index + ' can not be found')
+    }
+
+  } else {
+    res.status(404).send("application with id: " + id + ' at index: ' + index + ' can not be found')
+  }
 })
 
 
 
-//notify update endpoint
+//notify update endpoint()
 app.get('/notify', function (req, res) {
   wss.getWss().clients.forEach(function (client) {
     if (client.readyState === WebSocket.OPEN) {
@@ -223,10 +239,48 @@ app.get('/notify/:clientID/:clientINDEX', function (req, res) {
   let id = req.params.clientID
   let index = req.params.clientINDEX
   let ws = getClientWs(id, index)
+
   if (ws != undefined) {
-    if (ws.readyState === WebSocket.OPEN) {
+    if (ws.readyState === WebSocket.OPEN){
+      
+      if(!clients[id].application_instances[index].updating) {
+      clients[id].application_instances[index].updating = true
+      let messageHandler = (msg)=>{
+       let data = JSON.parse(msg)
+      switch (data.type){
+         case msgMap['update']:
+          if(!data.detail.updating){
+            if(data.detail.updatingError){
+              res.status(500).send('Update failed: ' + clients[id].application_name + '/' + index)
+            }else{
+
+              res.status(200).send('Update successed: ' + clients[id].application_name + '/' + index)
+            }
+            removal('normal')
+          }
+         break;
+         default: break;
+      }
+    }
+
+    let removal = (type)=>{
+      if(type!='normal'){
+           res.status(503).send('Failed to receive update response: ' + clients[id].application_name + '/' + index +' '+ err||"")
+      }
+      ws.removeListener('message',messageHandler)
+      ws.removeListener('error',removal)
+      ws.removeListener('close',removal)
+    }
+
+      ws.on('message',messageHandler)
+      ws.once('close',removal)
+      ws.once('error',removal )
       ws.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": '' }))
-      res.status(200).send('Successfully notify virus database update: ' + clients[id].application_name + '/' + index)
+
+      }else{
+         res.status(400).send('Updating is progress: ' + clients[id].application_name + '/' + index)
+      }
+
     } else {
       res.status(503).send('Failed to notify application: ' + clients[id].application_name + '/' + index + ', communication tunnel is not established.')
     }
