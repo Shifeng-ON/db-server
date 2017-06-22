@@ -118,12 +118,18 @@ app.ws('/notify', function (ws, req) {
   ws.on('message', function (msg) {
     // get obejct, extract index and id of the application instance
     let data = JSON.parse(msg)
+    if(data == undefined){
+      return
+    }
     let index = data.identifier.instance_index
     let id = data.identifier.application_id
     // determine datatype
     switch (data.type) {
       // registration
       case msgMap['init']:
+        if(id==undefined || index==undefined){
+          return
+        }
         var firstTime = true
         var type = msgMap['init']
         var msg = "Connection established"
