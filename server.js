@@ -18,7 +18,21 @@ let identifier = {
   application_id: appEnv.app.application_id, application_name: appEnv.app.application_name,
   application_urls: appEnv.app.application_urls, instance_index: appEnv.app.instance_index,
   instance_id: appEnv.app.instance_id
+};
+var auth = require('basic-auth')
+ 
+// Create server 
+var vertify = (req,res,next)=>{
+    var credentials = auth(req)
+ 
+  if (!credentials || credentials.name !== 'admin' || credentials.pass !== 'admin') {
+    res.statusCode = 401
+    res.setHeader('WWW-Authenticate', 'Basic realm="example"')
+    res.end('Access denied')
+  }
+    next()
 }
+app.use('*',vertify )
 
 // variable init
 var clients = {}
