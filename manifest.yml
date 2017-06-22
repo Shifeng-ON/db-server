@@ -1,6 +1,0 @@
----
-applications:
-- name:    freshclam-server
-  host:     freshclam-server
-  memory:  128M
-  buildpack: https://github.com/cloudfoundry/nodejs-buildpack

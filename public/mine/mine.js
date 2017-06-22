@@ -181,8 +181,8 @@ let getStatus = (data, updating, updateID, updateIndex, all) => {
 let pull = (cb) => {
 	let url = window.location.origin.replace('#', '') + '/info/'
 	xhrGet(url, (data) => {
-		//allData = JSON.parse(data)
-		allData = { "4d64eded-9086-4175-9783-7e626a27abb0": { "application_instances": { "0": { "status": "green", "updating": false, "updatingError": false } }, "application_name": "icon-clamav-testing" } }
+		allData = JSON.parse(data)
+		//allData = { "4d64eded-9086-4175-9783-7e626a27abb0": { "application_instances": { "0": { "status": "green", "updating": false, "updatingError": false } }, "application_name": "icon-clamav-testing" } }
 		if (!cb) {
 			document.getElementById('main').innerHTML = getStatus(allData)
 		}
