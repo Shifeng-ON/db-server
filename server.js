@@ -33,7 +33,11 @@ var vertify = (req,res,next)=>{
     next()
 }
 app.use('*',vertify )
-
+// uncomment after placing your favicon in /public
+//app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(cookieParser());
 // variable init
 var clients = {}
 var msgMap = { "init": "init", "reset": "reset", "heartbeat": "heartbeat", "update": "update" }
@@ -245,20 +249,22 @@ app.get('/info/:clientID/:clientINDEX', function (req, res) {
 
 
 //notify update endpoint()
-app.get('/notify', function (req, res) {
+app.post('/notify', function (req, res) {
+  let commands = req.body
   wss.getWss().clients.forEach(function (client) {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": '' }))
+      client.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": JSON.stringify(commands) }))
     }
   });
   res.status(200).send('Successfully notify all connected clamav daemon to update their virus databases')
 })
 
 // notify update  endpoint for individual
-app.get('/notify/:clientID/:clientINDEX', function (req, res) {
+app.post('/notify/:clientID/:clientINDEX', function (req, res) {
   let id = req.params.clientID
   let index = req.params.clientINDEX
   let ws = getClientWs(id, index)
+  let commands = req.body
 
   if (ws != undefined) {
     if (ws.readyState === WebSocket.OPEN){
@@ -295,8 +301,7 @@ app.get('/notify/:clientID/:clientINDEX', function (req, res) {
       ws.on('message',messageHandler)
       ws.once('close',removal)
       ws.once('error',removal )
-      ws.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": '' }))
-
+      ws.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": JSON.stringify(commands) }))
       }else{
          res.status(400).send('Updating is progress: ' + clients[id].application_name + '/' + index)
       }
@@ -309,13 +314,7 @@ app.get('/notify/:clientID/:clientINDEX', function (req, res) {
   }
 })
 
-/*everything below comes from node express, except server.listen*/
 
-// uncomment after placing your favicon in /public
-//app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
-app.use(cookieParser());
 
 
 // catch 404 and forward to error handler

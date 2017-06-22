@@ -35,7 +35,7 @@ function xhrGet(url, callback, errback) {
 function xhrPost(url, data, callback, errback) {
 	var xhr = new createXHR();
 	xhr.open("POST", url, true);
-	xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+	xhr.setRequestHeader("Content-type", "application/json");
 	xhr.onreadystatechange = function () {
 		if (xhr.readyState == 4) {
 			if (xhr.status == 200) {
@@ -47,13 +47,19 @@ function xhrPost(url, data, callback, errback) {
 	};
 	xhr.timeout = 100000;
 	xhr.ontimeout = errback;
-	xhr.send(objectToQuery(data));
+	console.log(data)
+	xhr.send(data);
 }
 
-let update = (id, index,all) => {
+let update = (id, index, all) => {
 	let url = window.location.origin.replace('#', '') + '/notify/' + id + '/' + index
-	document.getElementById('main').innerHTML = getStatus(allData, true, id, index,all)
-	xhrGet(url, (data) => {
+	let PMvalue = document.getElementById('PMIP').value
+	var PM ={}
+	if (PMvalue != '') {
+		PM["PrivateMirror"] = PMvalue 
+	}
+	document.getElementById('main').innerHTML = getStatus(allData, true, id, index, all)
+	xhrPost(url, JSON.stringify({ "commands": PM }), (data) => {
 		pull()
 	}, (err) => {
 		pull()
@@ -61,19 +67,19 @@ let update = (id, index,all) => {
 }
 
 let updateAll = () => {
-	pull(()=>{
+	pull(() => {
 		for (var id of Object.keys(allData)) {
 			for (var index of Object.keys(allData[id].application_instances)) {
-				update(id,index,true)
+				update(id, index, true)
 			}
-	}
+		}
 	})
-	
+
 }
 
-let updateSingle=(id, index,all)=>{
-	pull(()=>{
-		update(id, index,all)
+let updateSingle = (id, index, all) => {
+	pull(() => {
+		update(id, index, all)
 	})
 }
 
@@ -83,8 +89,8 @@ let getEmptyNoti = (text) => {
 	return result
 
 }
-let getUpdateStatus = (clientData, id, index, updating, updateID, updateIndex,all) => {
-	if (clientData[id].application_instances[index].updating || all == true||(updating == true && id == updateID && index == updateIndex )) {
+let getUpdateStatus = (clientData, id, index, updating, updateID, updateIndex, all) => {
+	if (clientData[id].application_instances[index].updating || all == true || (updating == true && id == updateID && index == updateIndex)) {
 		return "<button class='transparent-progress'> <div class='loader'></div></button>"
 	}
 	if (clientData[id].application_instances[index].updatingError) {
@@ -94,28 +100,28 @@ let getUpdateStatus = (clientData, id, index, updating, updateID, updateIndex,al
 
 
 }
-let getUpdateStatusAll = (clientData,updating,all) => {
+let getUpdateStatusAll = (clientData, updating, all) => {
 
-	if (updating==true || all == true) {
+	if (updating == true || all == true) {
 		return '<button class="update-button-disable" >Update All</button>'
 
 	} else {
-		var  temp = false
+		var temp = false
 		for (var id of Object.keys(clientData)) {
 			for (var index of Object.keys(clientData[id].application_instances)) {
-				if(clientData[id].application_instances[index].updating){
-					temp =true
+				if (clientData[id].application_instances[index].updating) {
+					temp = true
 				}
 			}
 		}
-		if(temp){
+		if (temp) {
 			return '<button class="update-button-disable" >Update All</button>'
 		}
 		return '<button class="update-button" onClick="updateAll()">Update All</button>'
 	}
 }
-let getMessage = (clientData, id, index, updating, updateID, updateIndex,all) => {
-	if (clientData[id].application_instances[index].updating || all == true||(updating == true && id == updateID && index == updateIndex )) {
+let getMessage = (clientData, id, index, updating, updateID, updateIndex, all) => {
+	if (clientData[id].application_instances[index].updating || all == true || (updating == true && id == updateID && index == updateIndex)) {
 		return '<div class="alert alert-info alert-custom" >\
   <strong  >Updating</strong> The virus database is updating.\
 </div>'
@@ -133,12 +139,13 @@ let getStatusIndicator = (clientData, id, index) => {
 	let color = clientData[id].application_instances[index].status
 	return "<div class='dot " + color + "'></div>"
 }
-let getStatus = (data, updating, updateID, updateIndex,all) => {
+let getStatus = (data, updating, updateID, updateIndex, all) => {
 	if (Object.keys(data).length <= 0) {
 
 		return getEmptyNoti("No status result")
 	} else {
 		var clientData = data
+		let oldPMvalue = document.getElementById('PMIP')==undefined?'': document.getElementById('PMIP').value
 		var result = ''
 		var nameTag = ''
 		var instanceTag = []
@@ -148,13 +155,19 @@ let getStatus = (data, updating, updateID, updateIndex,all) => {
 			for (var index of Object.keys(clientData[id].application_instances)) {
 				instanceTag.push("<tr><td class='middle'>" + index + "</td>\
 				<td class='middle'>"+ getStatusIndicator(clientData, id, index) + "</td>\
-				<td class='middle'>"+ getMessage(clientData, id, index, updating, updateID, updateIndex,all) + "</td>\
-				<td class='middle text-right	'>"+ getUpdateStatus(clientData, id, index, updating, updateID, updateIndex,all) + "</td></tr>")
+				<td class='middle'>"+ getMessage(clientData, id, index, updating, updateID, updateIndex, all) + "</td>\
+				<td class='middle text-right	'>"+ getUpdateStatus(clientData, id, index, updating, updateID, updateIndex, all) + "</td></tr>")
 			}
 			result += '<div class="panel panel-default">\
 		<div class="panel-heading" >'+ nameTag + '</div>\
+		<div class="panel-body">\
+			<div class="form-group">\
+  				<label for="usr">Private Mirror IP:</label>\
+  				<input type="text" value="'+oldPMvalue+'" id="PMIP" class="form-control" id="usr">\
+			</div>\
+		</div>\
         <table class="table">\
-		<thead><tr><th>#</th> <th>Status</th> <th class="text-center">Message</th><th class="text-right">'+ getUpdateStatusAll(clientData,updating,all) + '</th></tr></thead>\
+		<thead><tr><th>#</th> <th>Status</th> <th class="text-center">Message</th><th class="text-right">'+ getUpdateStatusAll(clientData, updating, all) + '</th></tr></thead>\
 		<tbody>'+ instanceTag.join('') + '</tbody>\
 		</table>\
 		</div>'
@@ -168,13 +181,14 @@ let getStatus = (data, updating, updateID, updateIndex,all) => {
 let pull = (cb) => {
 	let url = window.location.origin.replace('#', '') + '/info/'
 	xhrGet(url, (data) => {
-		allData = JSON.parse(data)
-		//allData = { "4d64eded-9086-4175-9783-7e626a27abb0": { "application_instances": { "0": { "status": "green", "updating": false, "updatingError": false } }, "application_name": "icon-clamav-testing" } }
-		if(!cb){
-			document.getElementById('main').innerHTML = getStatus(allData)}
-			else{
-				cb()
-			}
+		//allData = JSON.parse(data)
+		allData = { "4d64eded-9086-4175-9783-7e626a27abb0": { "application_instances": { "0": { "status": "green", "updating": false, "updatingError": false } }, "application_name": "icon-clamav-testing" } }
+		if (!cb) {
+			document.getElementById('main').innerHTML = getStatus(allData)
+		}
+		else {
+			cb()
+		}
 	}, (err) => {
 		allData = {}
 		document.getElementById('main').innerHTML = getEmptyNoti(err)
