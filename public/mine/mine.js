@@ -70,7 +70,7 @@ let updateAll = () => {
 	pull(() => {
 		for (var id of Object.keys(allData)) {
 			for (var index of Object.keys(allData[id].application_instances)) {
-					if (allData[id].application_instances[index].status != 'unknown') {
+					if (allData[id].application_instances[index].status != 'unknown' && allData[id].application_instances[index].status != 'init') {
 						update(id, index, true)
 					}
 				
@@ -82,7 +82,7 @@ let updateAll = () => {
 
 let updateSingle = (id, index, all) => {
 	pull(() => {
-		if (allData[id].application_instances[index].status != 'unknown') {
+		if (allData[id].application_instances[index].status != 'unknown' && allData[id].application_instances[index].status != 'init') {
 			update(id, index, all)
 		}
 	})
@@ -95,7 +95,7 @@ let getEmptyNoti = (text) => {
 
 }
 let getUpdateStatus = (clientData, id, index, updating, updateID, updateIndex, all) => {
-	if (clientData[id].application_instances[index].status == 'unknown') {
+	if (clientData[id].application_instances[index].status == 'unknown' ||clientData[id].application_instances[index].status == 'init' ) {
 		return "<button class='update-button-disable' >Update</button>"
 	}
 	if (clientData[id].application_instances[index].updating || all == true || (updating == true && id == updateID && index == updateIndex)) {
@@ -121,6 +121,10 @@ let getUpdateStatusAll = (clientData, updating, all) => {
 				if (clientData[id].application_instances[index].updating) {
 					temp = true
 				}
+				if (clientData[id].application_instances[index].status =='unknown'|| clientData[id].application_instances[index].status =='init') {
+					temp = true
+				}
+
 			}
 		}
 		if (temp) {
@@ -135,6 +139,11 @@ let getMessage = (clientData, id, index, updating, updateID, updateIndex, all) =
   		<strong  >Unreachable</strong> The clamav is unreachable.\
 		</div>'
 	}
+	if (clientData[id].application_instances[index].status == 'init') {
+		return '<div class="alert alert-info alert-custom" >\
+  		<strong  >Initialization</strong> The clamav is initializing.\
+		</div>'
+	}
 	if (clientData[id].application_instances[index].updating || all == true || (updating == true && id == updateID && index == updateIndex)) {
 		return '<div class="alert alert-info alert-custom" >\
   		<strong  >Updating</strong> The virus database is updating.\
@@ -145,6 +154,7 @@ let getMessage = (clientData, id, index, updating, updateID, updateIndex, all) =
   		<strong  >Erorr</strong> '+ clientData[id].application_instances[index].errorMsg + ', please try again.\
 		</div>'
 	}
+
 	return '<div class="alert alert-success alert-custom">\
  			 <strong  >Idle</strong> Updating is on idle status.\
 			</div>'
@@ -205,6 +215,6 @@ let pull = (cb) => {
 pull()
 setInterval(() => {
 	pull()
-}, 15000)
+}, 3000)
 
 

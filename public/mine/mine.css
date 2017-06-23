@@ -9,7 +9,9 @@ background-color: lightgray;
 .green{
 background-color: green;
 }
-
+.init{
+    background-color:skyblue;
+}
 .red{
 background-color: red;
 }

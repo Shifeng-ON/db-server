@@ -96,9 +96,23 @@ getClientIdentifier = (ws) => {
   }
   return client
 }
+
+//clear up client
+let clearUp=(name,id,index)=>{
+  console.log(processType, "Will delete disconnected application after 10 minutes: "+ name + '(' + id + ')/' + index)
+  clients[id].application_instances[index].timer = setTimeout(
+    ()=>{
+      console.log(processType, "Deleting application: "+ name + '(' + id + ')/' + index)
+      delete clients[id].application_instances[index]
+      if(Object.keys(clients[id].application_instances).length == 0){
+        delete clients[id]
+      }
+    }
+    ,600000)
+}
 // websocket endpoint 
 app.ws('/notify', function (ws, req) {
-
+  
   ws.on('error', (err) => {
     var msg = "Disconnected client is not registered"
     var client = getClientIdentifier(ws)
@@ -107,6 +121,7 @@ app.ws('/notify', function (ws, req) {
       clients[client.id].application_instances[client.index].status = 'unknown'
       clients[client.id].application_instances[client.index].updating = false
       clients[client.id].application_instances[client.index].updatingError = false
+      clearUp(client.name,client.id,client.index)
     }
     logger.error(processType, 'client connection errr: ' + err + ', client: ' + msg)
   })
@@ -118,6 +133,7 @@ app.ws('/notify', function (ws, req) {
       clients[client.id].application_instances[client.index].status = 'unknown'
       clients[client.id].application_instances[client.index].updating = false
       clients[client.id].application_instances[client.index].updatingError = false
+      clearUp(client.name,client.id,client.index)
     }
     logger.log(processType, "Client disconnected: " + msg)
   })
@@ -154,14 +170,17 @@ app.ws('/notify', function (ws, req) {
           // adding application name and urls and other instance status
           clients[id].application_name = data.identifier.application_name
           clients[id].application_urls = data.identifier.application_urls
-          clients[id].application_instances[index].status = 'unknown'
+          clients[id].application_instances[index].status = 'init'
           clients[id].application_instances[index].updating = false
           clients[id].application_instances[index].updatingError = false
           clients[id].application_instances[index].errorMsg = undefined
           clients[id].application_instances[index].ws = ws
+          clients[id].application_instances[index].timer = 0
         } else {
           // only need to change websocket
           clients[id].application_instances[index].ws = ws
+          clearTimeout(clients[id].application_instances[index].timer)
+          clients[id].application_instances[index].timer = 0
           type = msgMap['reset']
           msg = 'Conection reset'
         }
@@ -211,7 +230,7 @@ app.use('/utility', express.static(path.join(__dirname, 'public')))
 
 // JSONstringify replacer to avoid showing ws object
 let replacer = (key, value) => {
-  if (key == "ws") {
+  if (key == "ws" || key =="timer") {
     return undefined
   }
   return value
