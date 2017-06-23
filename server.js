@@ -56,6 +56,7 @@ sendHeartBeat = () => {
         clients[id].application_instances[index].status = 'unknown'
         clients[id].application_instances[index].updating = false
         clients[id].application_instances[index].updatingError = false
+        clients[id].application_instances[index].errorMsg = undefined
         logger.debug(processType, "Communication tunnel does not exist for : " + clients[id].application_name + '(' + id + ')/' + index)
       }
     }
@@ -156,6 +157,7 @@ app.ws('/notify', function (ws, req) {
           clients[id].application_instances[index].status = 'unknown'
           clients[id].application_instances[index].updating = false
           clients[id].application_instances[index].updatingError = false
+          clients[id].application_instances[index].errorMsg = undefined
           clients[id].application_instances[index].ws = ws
         } else {
           // only need to change websocket
@@ -182,6 +184,7 @@ app.ws('/notify', function (ws, req) {
         var msg = ''
         clients[id].application_instances[index].updating = data.detail.updating
         clients[id].application_instances[index].updatingError = data.detail.updatingError
+        clients[id].application_instances[index].errorMsg = data.detail.errorMsg
         if (data.detail.updating) {
           msg = "updating virus database"
         } else {
@@ -251,10 +254,10 @@ app.get('/info/:clientID/:clientINDEX', function (req, res) {
 
 //notify update endpoint()
 app.post('/notify', function (req, res) {
-  let commands = req.body
+  let options = req.body
   wss.getWss().clients.forEach(function (client) {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": JSON.stringify(commands) }))
+      client.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail":options }))
     }
   });
   res.status(200).send('Successfully notify all connected clamav daemon to update their virus databases')
@@ -265,7 +268,7 @@ app.post('/notify/:clientID/:clientINDEX', function (req, res) {
   let id = req.params.clientID
   let index = req.params.clientINDEX
   let ws = getClientWs(id, index)
-  let commands = req.body
+  let options = req.body
 
   if (ws != undefined) {
     if (ws.readyState === WebSocket.OPEN){
@@ -302,7 +305,7 @@ app.post('/notify/:clientID/:clientINDEX', function (req, res) {
       ws.on('message',messageHandler)
       ws.once('close',removal)
       ws.once('error',removal )
-      ws.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": JSON.stringify(commands) }))
+      ws.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": options }))
       }else{
          res.status(400).send('Updating is progress: ' + clients[id].application_name + '/' + index)
       }

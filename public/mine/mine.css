@@ -18,6 +18,8 @@ background-color: red;
     width:10px;
     height:10px;
     border-radius: 50%;
+  position: relative;
+  left:calc(50% - 5px);
 
 }
 
