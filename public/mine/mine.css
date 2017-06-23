@@ -89,3 +89,15 @@ background-color: red;
     color:#d24c20;
 
 }
+.form-group{
+    flex-basis:80%;
+}
+.container{
+    flex-basis: 90%;
+}
+.PM-div{
+display: flex;
+width:100%;
+flex-wrap: wrap;
+justify-content: center;
+}

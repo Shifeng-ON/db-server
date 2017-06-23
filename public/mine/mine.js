@@ -145,7 +145,6 @@ let getStatus = (data, updating, updateID, updateIndex, all) => {
 		return getEmptyNoti("No status result")
 	} else {
 		var clientData = data
-		let oldPMvalue = document.getElementById('PMIP')==undefined?'': document.getElementById('PMIP').value
 		var result = ''
 		var nameTag = ''
 		var instanceTag = []
@@ -159,22 +158,16 @@ let getStatus = (data, updating, updateID, updateIndex, all) => {
 				<td class='middle text-right	'>"+ getUpdateStatus(clientData, id, index, updating, updateID, updateIndex, all) + "</td></tr>")
 			}
 			result += '<div class="panel panel-default">\
-		<div class="panel-heading" >'+ nameTag + '</div>\
-		<div class="panel-body">\
-			<div class="form-group">\
-  				<label for="usr">Private Mirror IP:</label>\
-  				<input type="text" value="'+oldPMvalue+'" id="PMIP" class="form-control" id="usr">\
-			</div>\
-		</div>\
-        <table class="table">\
-		<thead><tr><th>#</th> <th>Status</th> <th class="text-center">Message</th><th class="text-right">'+ getUpdateStatusAll(clientData, updating, all) + '</th></tr></thead>\
-		<tbody>'+ instanceTag.join('') + '</tbody>\
-		</table>\
-		</div>'
+				<div class="panel-heading" >'+ nameTag + '</div>\
+        		<table class="table">\
+					<thead><tr><th>#</th> <th>Status</th> <th class="text-center">Message</th><th class="text-right">'+ getUpdateStatusAll(clientData, updating, all) + '</th></tr></thead>\
+					<tbody>'+ instanceTag.join('') + '</tbody>\
+				</table>\
+				</div>'
 		}
 
 
-		return result
+		return result	
 	}
 
 }
