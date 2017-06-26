@@ -139,6 +139,11 @@ let getMessage = (clientData, id, index, updating, updateID, updateIndex, all) =
   		<strong  >Unreachable</strong> The clamav is unreachable.\
 		</div>'
 	}
+	if (clientData[id].application_instances[index].status == 'red') {
+		return '<div class="alert alert-warning alert-custom" >\
+  		<strong >Unavailable</strong> The virus scanner is unavailable.\
+		</div>'
+	}
 	if (clientData[id].application_instances[index].status == 'init') {
 		return '<div class="alert alert-info alert-custom" >\
   		<strong  >Initialization</strong> The clamav is initializing.\
@@ -184,7 +189,7 @@ let getStatus = (data, updating, updateID, updateIndex, all) => {
 			result += '<div class="panel panel-default">\
 				<div class="panel-heading" >'+ nameTag + '</div>\
         		<table class="table">\
-					<thead><tr><th>#</th> <th class="text-center">Client Status</th> <th class="text-center">Message</th><th class="text-right">'+ getUpdateStatusAll(clientData, updating, all) + '</th></tr></thead>\
+					<thead><tr><th>#</th> <th class="text-center">Scanner status</th> <th class="text-center">Message</th><th class="text-right">'+ getUpdateStatusAll(clientData, updating, all) + '</th></tr></thead>\
 					<tbody>'+ instanceTag.join('') + '</tbody>\
 				</table>\
 				</div>'

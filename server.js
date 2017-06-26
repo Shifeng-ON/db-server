@@ -16,7 +16,7 @@ var processType = "Server";
 var config = require('./config.js')
 let identifier = {
   application_id: appEnv.app.application_id, application_name: appEnv.app.application_name,
-  application_urls: appEnv.app.application_urls, instance_index: appEnv.app.instance_index,
+  application_uris: appEnv.app.application_uris, instance_index: appEnv.app.instance_index,
   instance_id: appEnv.app.instance_id
 };
 
@@ -45,7 +45,7 @@ var msgMap = { "init": "init", "reset": "reset", "heartbeat": "heartbeat", "upda
 
 
 // send heart beat request to all clients
-sendHeartBeat = () => {
+let sendHeartBeat = () => {
   logger.debug(processType, "Request heartbeat")
   for (var id of Object.keys(clients)) {
     for (var index of Object.keys(clients[id].application_instances)) {
@@ -64,18 +64,19 @@ sendHeartBeat = () => {
 
 }
 
-// requesting heart beat every defined seconds, can excced 100 seconds
+// requesting heart beat every defined seconds, can exceed 100 seconds
 let maxHeartBeatInterval = 100
 let minHeartBeatInterval = 10
 var heartbeatInterval = Math.min(maxHeartBeatInterval, config.server.heartbeatInterval)
 heartbeatInterval = Math.max(minHeartBeatInterval, heartbeatInterval)
+
 setInterval(() => {
   sendHeartBeat()
 
 }, heartbeatInterval * 1000)
 
 //get client WS
-getClientWs = (id, index) => {
+let getClientWs = (id, index) => {
   if (clients[id] != undefined) {
     if (clients[id].application_instances[index] != undefined) {
       return clients[id].application_instances[index].ws
@@ -84,7 +85,7 @@ getClientWs = (id, index) => {
   return undefined
 }
 // get clientID
-getClientIdentifier = (ws) => {
+let getClientIdentifier = (ws) => {
   var client = undefined
 
   for (var innerID of Object.keys(clients)) {
@@ -167,9 +168,9 @@ app.ws('/notify', function (ws, req) {
         }
 
         if (firstTime) {
-          // adding application name and urls and other instance status
+          // adding application name and uris and other instance status
           clients[id].application_name = data.identifier.application_name
-          clients[id].application_urls = data.identifier.application_urls
+          clients[id].application_uris = data.identifier.application_uris
           clients[id].application_instances[index].status = 'init'
           clients[id].application_instances[index].updating = false
           clients[id].application_instances[index].updatingError = false
@@ -208,7 +209,7 @@ app.ws('/notify', function (ws, req) {
           msg = "updating virus database"
         } else {
           if (data.detail.updatingError) {
-            msg = "Error updating virus database"
+            msg = "Error updating virus database: " +  clients[id].application_instances[index].errorMsg
           } else {
             msg = " Successfully updated virus database"
           }
