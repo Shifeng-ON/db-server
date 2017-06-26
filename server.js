@@ -41,7 +41,7 @@ var vertify = (req,res,next)=>{
 app.use('*',vertify )
 // variable init
 var clients = {}
-var msgMap = { "init": "init", "reset": "reset", "heartbeat": "heartbeat", "update": "update" }
+var msgMap = { "init": "init", "reset": "reset", "heartbeat": "heartbeat","version":"version", "update": "update" }
 
 
 // send heart beat request to all clients
@@ -57,6 +57,7 @@ let sendHeartBeat = () => {
         clients[id].application_instances[index].updating = false
         clients[id].application_instances[index].updatingError = false
         clients[id].application_instances[index].errorMsg = undefined
+        clients[id].application_instances[index].version = undefined
         logger.debug(processType, "Communication tunnel does not exist for : " + clients[id].application_name + '(' + id + ')/' + index)
       }
     }
@@ -122,6 +123,8 @@ app.ws('/notify', function (ws, req) {
       clients[client.id].application_instances[client.index].status = 'unknown'
       clients[client.id].application_instances[client.index].updating = false
       clients[client.id].application_instances[client.index].updatingError = false
+      clients[client.id].application_instances[client.index].version = undefined
+      clients[client.id].application_instances[client.index].errorMsg = undefined
       clearUp(client.name,client.id,client.index)
     }
     logger.error(processType, 'client connection errr: ' + err + ', client: ' + msg)
@@ -134,6 +137,8 @@ app.ws('/notify', function (ws, req) {
       clients[client.id].application_instances[client.index].status = 'unknown'
       clients[client.id].application_instances[client.index].updating = false
       clients[client.id].application_instances[client.index].updatingError = false
+      clients[client.id].application_instances[client.index].version = undefined
+      clients[client.id].application_instances[client.index].errorMsg = undefined
       clearUp(client.name,client.id,client.index)
     }
     logger.log(processType, "Client disconnected: " + msg)
@@ -175,6 +180,7 @@ app.ws('/notify', function (ws, req) {
           clients[id].application_instances[index].updating = false
           clients[id].application_instances[index].updatingError = false
           clients[id].application_instances[index].errorMsg = undefined
+          clients[id].application_instances[index].version = undefined
           clients[id].application_instances[index].ws = ws
           clients[id].application_instances[index].timer = 0
         } else {
@@ -189,15 +195,26 @@ app.ws('/notify', function (ws, req) {
         if (clients[id].application_instances[index].ws.readyState === WebSocket.OPEN) {
           clients[id].application_instances[index].ws.send(JSON.stringify({ "type": type, "identifier": identifier, "detail": '' }))
         } else {
-          logger.error("client websockt hang up immediately after connected." + clients[id].application_name + '(' + id + ')/' + index)
+          logger.error("client websocket hang up immediately after connected." + clients[id].application_name + '(' + id + ')/' + index)
         }
-
-
         break
       // status update
       case msgMap['heartbeat']:
         clients[id].application_instances[index].status = data.detail
+        // get virus version on first time if it is green.
+        if(clients[id].application_instances[index].version == undefined){
+           clients[id].application_instances[index].ws.send(JSON.stringify({ "type":msgMap["version"], "identifier": identifier, "detail": '' }))
+        }
         logger.debug(processType, "Receiving heartbeat: " + clients[id].application_name + '(' + id + ')/' + index)
+        break
+      // get version
+      case msgMap['version']:
+        clients[id].application_instances[index].version = Object.assign({},data.detail)
+        if(clients[id].application_instances[index].version != undefined){
+          logger.debug(processType, "Receiving version "+clients[id].application_instances[index].version.version +" : " + clients[id].application_name + '(' + id + ')/' + index)
+        }else{
+          logger.debug(processType, clients[id].application_instances[index].version.errorMsg + " : " + clients[id].application_name + '(' + id + ')/' + index)
+        }
         break
       // virus database update
       case msgMap['update']:
@@ -212,6 +229,8 @@ app.ws('/notify', function (ws, req) {
             msg = "Error updating virus database: " +  clients[id].application_instances[index].errorMsg
           } else {
             msg = " Successfully updated virus database"
+          // getting new version
+           clients[id].application_instances[index].ws.send(JSON.stringify({ "type":msgMap["version"], "identifier": identifier, "detail": '' }))
           }
         }
         logger.debug(processType, msg + ": " + clients[id].application_name + '(' + id + ')/' + index)

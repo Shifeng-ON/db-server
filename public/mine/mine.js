@@ -61,8 +61,11 @@ let update = (id, index, all) => {
 	document.getElementById('main').innerHTML = getStatus(allData, true, id, index, all)
 	xhrPost(url, JSON.stringify({ "options": PM }), (data) => {
 		pull()
+		setTimeout(()=>{pull()},1000)
 	}, (err) => {
 		pull()
+
+		setTimeout(()=>{pull()},1000)
 	})
 }
 
@@ -70,10 +73,10 @@ let updateAll = () => {
 	pull(() => {
 		for (var id of Object.keys(allData)) {
 			for (var index of Object.keys(allData[id].application_instances)) {
-					if (allData[id].application_instances[index].status != 'unknown' && allData[id].application_instances[index].status != 'init') {
-						update(id, index, true)
-					}
-				
+				if (allData[id].application_instances[index].status != 'unknown' && allData[id].application_instances[index].status != 'init') {
+					update(id, index, true)
+				}
+
 			}
 		}
 	})
@@ -95,14 +98,14 @@ let getEmptyNoti = (text) => {
 
 }
 let getUpdateStatus = (clientData, id, index, updating, updateID, updateIndex, all) => {
-	if (clientData[id].application_instances[index].status == 'unknown' ||clientData[id].application_instances[index].status == 'init' ) {
+	if (clientData[id].application_instances[index].status == 'unknown' || clientData[id].application_instances[index].status == 'init') {
 		return "<button class='update-button-disable' >Update</button>"
 	}
 	if (clientData[id].application_instances[index].updating || all == true || (updating == true && id == updateID && index == updateIndex)) {
 		return "<button class='transparent-progress'> <div class='loader'></div></button>"
 	}
 	if (clientData[id].application_instances[index].updatingError) {
-		
+
 		return "<button class='update-button' onClick='updateSingle(\"" + id + "\",\"" + index + "\")'><span class=' glyphicon glyphicon-exclamation-sign'></span> Update</button>"
 	}
 	return "<button class='update-button' onClick='updateSingle(\"" + id + "\",\"" + index + "\")'>Update</button>"
@@ -121,7 +124,7 @@ let getUpdateStatusAll = (clientData, updating, all) => {
 				if (clientData[id].application_instances[index].updating) {
 					temp = true
 				}
-				if (clientData[id].application_instances[index].status =='unknown'|| clientData[id].application_instances[index].status =='init') {
+				if (clientData[id].application_instances[index].status == 'unknown' || clientData[id].application_instances[index].status == 'init') {
 					temp = true
 				}
 
@@ -168,6 +171,17 @@ let getStatusIndicator = (clientData, id, index) => {
 	let color = clientData[id].application_instances[index].status
 	return "<div  class='dot " + color + "'></div>"
 }
+let getVersion = (clientData, id, index) => {
+	if (clientData[id].application_instances[index].version != undefined) {
+		if (clientData[id].application_instances[index].version.version != undefined) {
+			return clientData[id].application_instances[index].version.version
+		} else {
+			return clientData[id].application_instances[index].version.errorMsg
+		}
+	} else {
+		return "N/A"
+	}
+}
 let getStatus = (data, updating, updateID, updateIndex, all) => {
 	if (Object.keys(data).length <= 0) {
 
@@ -184,12 +198,13 @@ let getStatus = (data, updating, updateID, updateIndex, all) => {
 				instanceTag.push("<tr><td class='middle'>" + index + "</td>\
 				<td class='middle'>"+ getStatusIndicator(clientData, id, index) + "</td>\
 				<td class='middle'>"+ getMessage(clientData, id, index, updating, updateID, updateIndex, all) + "</td>\
+				<td class='middle text-center'>" + getVersion(clientData, id, index) + "</td>\
 				<td class='middle text-right	'>"+ getUpdateStatus(clientData, id, index, updating, updateID, updateIndex, all) + "</td></tr>")
 			}
 			result += '<div class="panel panel-default">\
 				<div class="panel-heading" >'+ nameTag + '</div>\
         		<table class="table">\
-					<thead><tr><th>#</th> <th class="text-center">Scanner status</th> <th class="text-center">Message</th><th class="text-right">'+ getUpdateStatusAll(clientData, updating, all) + '</th></tr></thead>\
+					<thead><tr><th>#</th> <th class="text-center">Scanner</th> <th class="text-center">Message</th><th class="text-center">Version</th><th class="text-right">'+ getUpdateStatusAll(clientData, updating, all) + '</th></tr></thead>\
 					<tbody>'+ instanceTag.join('') + '</tbody>\
 				</table>\
 				</div>'
