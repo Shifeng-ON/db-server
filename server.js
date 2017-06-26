@@ -333,8 +333,10 @@ app.post('/notify/:clientID/:clientINDEX', function (req, res) {
     }
 
     let removal = (type)=>{
-      if(type!='normal'){
-           res.status(503).send('Failed to receive update response: ' + clients[id].application_name + '/' + index +' '+ err||"")
+      if(type!= undefined){
+        if(type!='normal'){
+            res.status(503).send('Failed to receive update response: ' + clients[id].application_name + '/' + index +' '+ type||"")
+        }
       }
       ws.removeListener('message',messageHandler)
       ws.removeListener('error',removal)
