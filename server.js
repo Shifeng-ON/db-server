@@ -67,10 +67,10 @@ let minHeartBeatInterval = 10
 var heartbeatInterval = Math.min(maxHeartBeatInterval, config.server.heartbeatInterval)
 heartbeatInterval = Math.max(minHeartBeatInterval, heartbeatInterval)
 
-let heartbeatTimer = setInterval(() => {
+setInterval(() => {
   sendHeartBeat()
 
-}, heartbeatInterval * 1000)
+}, heartbeatInterval * 1000).unref()
 
 //get client WS
 let getClientWs = (id, index) => {
@@ -113,7 +113,9 @@ let clearUp = (name, id, index) => {
         }
       }
       , 600000)
+    clients[id].application_instances[index].timer.unref()
   }
+  
 
 }
 // websocket endpoint 
@@ -451,24 +453,3 @@ function onListening() {
     : 'port ' + addr.port;
 }
 
-
-let exitHandler = (e)=>{
-  clearInterval(heartbeatTimer)
-   for (var id of Object.keys(clients)) {
-    for (var index of Object.keys(clients[id].application_instances)) {
-      if(clients[id].application_instances[index].timer != undefined){
-        clearTimeout(clients[id].application_instances[index].timer)
-
-      }
-    }
-  
-  }
-  logger.log(processType, "Program exit.") 
-  if(e){
-    logger.error(processType,e.message)
-  }
-  process.exit(0)
-}
-process.on('exit',exitHandler)
-
-process.on('uncaughtException',exitHandler)
