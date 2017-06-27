@@ -200,8 +200,8 @@ app.ws('/notify', function (ws, req) {
         break
       // status update
       case msgMap['heartbeat']:
-        clients[id].application_instances[index].status = data.detail
-        // get virus version on first time if it is green.
+        clients[id].application_instances[index].status = data.detail   
+        // get virus version on first time
         if (clients[id].application_instances[index].version == undefined) {
           clients[id].application_instances[index].ws.send(JSON.stringify({ "type": msgMap["version"], "identifier": identifier, "detail": '' }))
         } else {
@@ -224,7 +224,7 @@ app.ws('/notify', function (ws, req) {
         } else {
           logger.debug(processType, "No version detail: " + clients[id].application_name + '(' + id + ')/' + index)
         }
-
+    
 
         break
       // virus database update

@@ -61,11 +61,8 @@ let update = (id, index, all) => {
 	document.getElementById('main').innerHTML = getStatus(allData, true, id, index, all)
 	xhrPost(url, JSON.stringify({ "options": PM }), (data) => {
 		pull()
-		setTimeout(()=>{pull()},1000)
 	}, (err) => {
 		pull()
-
-		setTimeout(()=>{pull()},1000)
 	})
 }
 
