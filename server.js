@@ -239,12 +239,9 @@ app.ws('/notify', function (ws, req) {
   })
 });
 
-// main endpoint
-app.get('/', function (req, res) {
-  res.status(200).send("<h2>server is alive</h2>")
-})
+
 // monitor endpoint
-app.use('/utility', express.static(path.join(__dirname, 'public')))
+app.use('/', express.static(path.join(__dirname, 'public')))
 
 
 // JSONstringify replacer to avoid showing ws object
