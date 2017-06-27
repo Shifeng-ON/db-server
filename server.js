@@ -27,21 +27,21 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 
 var auth = require('basic-auth')
- 
+
 // Create server 
-var vertify = (req,res,next)=>{
-    var credentials = auth(req)
+var vertify = (req, res, next) => {
+  var credentials = auth(req)
   if (!credentials || credentials.name !== 'admin' || credentials.pass !== 'admin') {
     res.setHeader('WWW-Authenticate', 'Basic realm="example"')
     res.status(401).send('Access denied')
-  }else{
+  } else {
     next()
-  } 
+  }
 }
-app.use('*',vertify )
+app.use('*', vertify)
 // variable init
 var clients = {}
-var msgMap = { "init": "init", "reset": "reset", "heartbeat": "heartbeat","version":"version", "update": "update" }
+var msgMap = { "init": "init", "reset": "reset", "heartbeat": "heartbeat", "version": "version", "update": "update" }
 
 
 // send heart beat request to all clients
@@ -100,21 +100,21 @@ let getClientIdentifier = (ws) => {
 }
 
 //clear up client
-let clearUp=(name,id,index)=>{
-  console.log(processType, "Will delete disconnected application after 10 minutes: "+ name + '(' + id + ')/' + index)
+let clearUp = (name, id, index) => {
+  logger.log(processType, "Will delete disconnected application after 10 minutes: " + name + '(' + id + ')/' + index)
   clients[id].application_instances[index].timer = setTimeout(
-    ()=>{
-      console.log(processType, "Deleting application: "+ name + '(' + id + ')/' + index)
+    () => {
+      logger.log(processType, "Deleting application: " + name + '(' + id + ')/' + index)
       delete clients[id].application_instances[index]
-      if(Object.keys(clients[id].application_instances).length == 0){
+      if (Object.keys(clients[id].application_instances).length == 0) {
         delete clients[id]
       }
     }
-    ,600000)
+    , 600000)
 }
 // websocket endpoint 
 app.ws('/notify', function (ws, req) {
-  
+
   ws.on('error', (err) => {
     var msg = "Disconnected client is not registered"
     var client = getClientIdentifier(ws)
@@ -125,7 +125,7 @@ app.ws('/notify', function (ws, req) {
       clients[client.id].application_instances[client.index].updatingError = false
       clients[client.id].application_instances[client.index].version = undefined
       clients[client.id].application_instances[client.index].errorMsg = undefined
-      clearUp(client.name,client.id,client.index)
+      clearUp(client.name, client.id, client.index)
     }
     logger.error(processType, 'client connection errr: ' + err + ', client: ' + msg)
   })
@@ -139,14 +139,14 @@ app.ws('/notify', function (ws, req) {
       clients[client.id].application_instances[client.index].updatingError = false
       clients[client.id].application_instances[client.index].version = undefined
       clients[client.id].application_instances[client.index].errorMsg = undefined
-      clearUp(client.name,client.id,client.index)
+      clearUp(client.name, client.id, client.index)
     }
     logger.log(processType, "Client disconnected: " + msg)
   })
   ws.on('message', function (msg) {
     // get obejct, extract index and id of the application instance
     let data = JSON.parse(msg)
-    if(data == undefined){
+    if (data == undefined) {
       return
     }
     let index = data.identifier.instance_index
@@ -155,7 +155,7 @@ app.ws('/notify', function (ws, req) {
     switch (data.type) {
       // registration
       case msgMap['init']:
-        if(id==undefined || index==undefined){
+        if (id == undefined || index == undefined) {
           return
         }
         var firstTime = true
@@ -202,19 +202,30 @@ app.ws('/notify', function (ws, req) {
       case msgMap['heartbeat']:
         clients[id].application_instances[index].status = data.detail
         // get virus version on first time if it is green.
-        if(clients[id].application_instances[index].version == undefined){
-           clients[id].application_instances[index].ws.send(JSON.stringify({ "type":msgMap["version"], "identifier": identifier, "detail": '' }))
+        if (clients[id].application_instances[index].version == undefined) {
+          clients[id].application_instances[index].ws.send(JSON.stringify({ "type": msgMap["version"], "identifier": identifier, "detail": '' }))
+        } else {
+          if (clients[id].application_instances[index].version.version == undefined) {
+            clients[id].application_instances[index].ws.send(JSON.stringify({ "type": msgMap["version"], "identifier": identifier, "detail": '' }))
+          }
         }
         logger.debug(processType, "Receiving heartbeat: " + clients[id].application_name + '(' + id + ')/' + index)
         break
       // get version
       case msgMap['version']:
-        clients[id].application_instances[index].version = Object.assign({},data.detail)
-        if(clients[id].application_instances[index].version != undefined){
-          logger.debug(processType, "Receiving version "+clients[id].application_instances[index].version.version +" : " + clients[id].application_name + '(' + id + ')/' + index)
-        }else{
-          logger.debug(processType, clients[id].application_instances[index].version.errorMsg + " : " + clients[id].application_name + '(' + id + ')/' + index)
+        if (data.detail != undefined) {
+          clients[id].application_instances[index].version = Object.assign({}, data.detail)
+          if (clients[id].application_instances[index].version != undefined) {
+            logger.debug(processType, "Receiving version " + clients[id].application_instances[index].version.version + " : " + clients[id].application_name + '(' + id + ')/' + index)
+          } else {
+            logger.debug(processType, clients[id].application_instances[index].version.errorMsg + " : " + clients[id].application_name + '(' + id + ')/' + index)
+          }
+
+        } else {
+          logger.debug(processType, "No version detail: " + clients[id].application_name + '(' + id + ')/' + index)
         }
+
+
         break
       // virus database update
       case msgMap['update']:
@@ -226,11 +237,11 @@ app.ws('/notify', function (ws, req) {
           msg = "updating virus database"
         } else {
           if (data.detail.updatingError) {
-            msg = "Error updating virus database: " +  clients[id].application_instances[index].errorMsg
+            msg = "Error updating virus database: " + clients[id].application_instances[index].errorMsg
           } else {
             msg = " Successfully updated virus database"
-          // getting new version
-           clients[id].application_instances[index].ws.send(JSON.stringify({ "type":msgMap["version"], "identifier": identifier, "detail": '' }))
+            // unset version, getting new one
+            clients[id].application_instances[index].version = { "errorMsg": 'Getting new version' }
           }
         }
         logger.debug(processType, msg + ": " + clients[id].application_name + '(' + id + ')/' + index)
@@ -241,7 +252,7 @@ app.ws('/notify', function (ws, req) {
 });
 
 // main endpoint
-app.get('/',function(req,res){
+app.get('/', function (req, res) {
   res.status(200).send("<h2>server is alive</h2>")
 })
 // monitor endpoint
@@ -250,7 +261,7 @@ app.use('/utility', express.static(path.join(__dirname, 'public')))
 
 // JSONstringify replacer to avoid showing ws object
 let replacer = (key, value) => {
-  if (key == "ws" || key =="timer") {
+  if (key == "ws" || key == "timer") {
     return undefined
   }
   return value
@@ -267,7 +278,7 @@ app.get('/info/:clientID', function (req, res) {
   let id = req.params.clientID
   var selectedClients = clients[id]
   if (selectedClients == undefined) {
-    res.status(404).send("application with id: " + id+" can no be found.")
+    res.status(404).send("application with id: " + id + " can no be found.")
   } else {
     res.status(200).send(JSON.stringify(selectedClients, replacer))
   }
@@ -296,7 +307,7 @@ app.post('/notify', function (req, res) {
   let options = req.body
   wss.getWss().clients.forEach(function (client) {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail":options }))
+      client.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": options }))
     }
   });
   res.status(200).send('Successfully notify all connected clamav daemon to update their virus databases')
@@ -310,45 +321,45 @@ app.post('/notify/:clientID/:clientINDEX', function (req, res) {
   let options = req.body
 
   if (ws != undefined) {
-    if (ws.readyState === WebSocket.OPEN){
-      
-      if(!clients[id].application_instances[index].updating) {
-      clients[id].application_instances[index].updating = true
-      let messageHandler = (msg)=>{
-       let data = JSON.parse(msg)
-      switch (data.type){
-         case msgMap['update']:
-          if(!data.detail.updating){
-            if(data.detail.updatingError){
-              res.status(500).send('Update failed: ' + clients[id].application_name + '/' + index)
-            }else{
+    if (ws.readyState === WebSocket.OPEN) {
 
-              res.status(200).send('Update successed: ' + clients[id].application_name + '/' + index)
-            }
-            removal('normal')
+      if (!clients[id].application_instances[index].updating) {
+        clients[id].application_instances[index].updating = true
+        let messageHandler = (msg) => {
+          let data = JSON.parse(msg)
+          switch (data.type) {
+            case msgMap['update']:
+              if (!data.detail.updating) {
+                if (data.detail.updatingError) {
+                  res.status(500).send('Update failed: ' + clients[id].application_name + '/' + index)
+                } else {
+
+                  res.status(200).send('Update successed: ' + clients[id].application_name + '/' + index)
+                }
+                removal('normal')
+              }
+              break;
+            default: break;
           }
-         break;
-         default: break;
-      }
-    }
-
-    let removal = (type)=>{
-      if(type!= undefined){
-        if(type!='normal'){
-            res.status(503).send('Failed to receive update response: ' + clients[id].application_name + '/' + index +' '+ type||"")
         }
-      }
-      ws.removeListener('message',messageHandler)
-      ws.removeListener('error',removal)
-      ws.removeListener('close',removal)
-    }
 
-      ws.on('message',messageHandler)
-      ws.once('close',removal)
-      ws.once('error',removal )
-      ws.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": options }))
-      }else{
-         res.status(400).send('Updating is progress: ' + clients[id].application_name + '/' + index)
+        let removal = (type) => {
+          if (type != undefined) {
+            if (type != 'normal') {
+              res.status(503).send('Failed to receive update response: ' + clients[id].application_name + '/' + index + ' ' + type || "")
+            }
+          }
+          ws.removeListener('message', messageHandler)
+          ws.removeListener('error', removal)
+          ws.removeListener('close', removal)
+        }
+
+        ws.on('message', messageHandler)
+        ws.once('close', removal)
+        ws.once('error', removal)
+        ws.send(JSON.stringify({ "type": msgMap['update'], "identifier": identifier, "detail": options }))
+      } else {
+        res.status(400).send('Updating is progress: ' + clients[id].application_name + '/' + index)
       }
 
     } else {
@@ -427,11 +438,11 @@ function onError(error) {
   // handle specific listen errors with friendly messages
   switch (error.code) {
     case 'EACCES':
-      console.error(bind + ' requires elevated privileges');
+      logger.error(processType, bind + ' requires elevated privileges');
       process.exit(1);
       break;
     case 'EADDRINUSE':
-      console.error(bind + ' is already in use');
+      logger.error(processType, bind + ' is already in use');
       process.exit(1);
       break;
     default:
