@@ -461,14 +461,14 @@ let exitHandler = (e)=>{
 
       }
     }
+  
   }
   logger.log(processType, "Program exit.") 
   if(e){
-    logger.error(processType,e)
+    logger.error(processType,e.message)
   }
+  process.exit(0)
 }
-process.on('SIGINT',exitHandler)
-
 process.on('exit',exitHandler)
 
 process.on('uncaughtException',exitHandler)
