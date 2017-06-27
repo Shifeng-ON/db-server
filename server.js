@@ -52,6 +52,8 @@ let sendHeartBeat = () => {
       let clientWS = getClientWs(id, index)
       if (clientWS.readyState === WebSocket.OPEN) {
         clientWS.send(JSON.stringify({ "type": msgMap['heartbeat'], "identifier": identifier, "detail": '' }))
+      } else {
+        clearUp(clients[id].application_name, id, index)
       }
     }
   }
@@ -94,21 +96,24 @@ let getClientIdentifier = (ws) => {
 
 //clear up client
 let clearUp = (name, id, index) => {
-  logger.log(processType, "Schedule to delete disconnected application after 10 minutes: " + name + '(' + id + ')/' + index)
-  clients[id].application_instances[index].status = 'unknown'
-  clients[id].application_instances[index].updating = false
-  clients[id].application_instances[index].updatingError = false
-  clients[id].application_instances[index].version = undefined
-  clients[id].application_instances[index].errorMsg = undefined
-  clients[id].application_instances[index].timer = setTimeout(
-    () => {
-      logger.log(processType, "Deleting application: " + name + '(' + id + ')/' + index)
-      delete clients[id].application_instances[index]
-      if (Object.keys(clients[id].application_instances).length == 0) {
-        delete clients[id]
+  if (clients[id].application_instances[index].timer == undefined) {
+    logger.log(processType, "Schedule to delete disconnected application after 10 minutes: " + name + '(' + id + ')/' + index)
+    clients[id].application_instances[index].status = 'unknown'
+    clients[id].application_instances[index].updating = false
+    clients[id].application_instances[index].updatingError = false
+    clients[id].application_instances[index].version = undefined
+    clients[id].application_instances[index].errorMsg = undefined
+    clients[id].application_instances[index].timer = setTimeout(
+      () => {
+        logger.log(processType, "Deleting application: " + name + '(' + id + ')/' + index)
+        delete clients[id].application_instances[index]
+        if (Object.keys(clients[id].application_instances).length == 0) {
+          delete clients[id]
+        }
       }
-    }
-    , 600000)
+      , 600000)
+  }
+
 }
 // websocket endpoint 
 app.ws('/notify', function (ws, req) {
@@ -170,12 +175,12 @@ app.ws('/notify', function (ws, req) {
           clients[id].application_instances[index].errorMsg = undefined
           clients[id].application_instances[index].version = undefined
           clients[id].application_instances[index].ws = ws
-          clients[id].application_instances[index].timer = 0
+          clients[id].application_instances[index].timer = undefined
         } else {
           // only need to change websocket
           clients[id].application_instances[index].ws = ws
           clearTimeout(clients[id].application_instances[index].timer)
-          clients[id].application_instances[index].timer = 0
+          clients[id].application_instances[index].timer = undefined
           type = msgMap['reset']
           msg = 'Conection reset'
         }
