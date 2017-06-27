@@ -52,13 +52,6 @@ let sendHeartBeat = () => {
       let clientWS = getClientWs(id, index)
       if (clientWS.readyState === WebSocket.OPEN) {
         clientWS.send(JSON.stringify({ "type": msgMap['heartbeat'], "identifier": identifier, "detail": '' }))
-      } else {
-        clients[id].application_instances[index].status = 'unknown'
-        clients[id].application_instances[index].updating = false
-        clients[id].application_instances[index].updatingError = false
-        clients[id].application_instances[index].errorMsg = undefined
-        clients[id].application_instances[index].version = undefined
-        logger.debug(processType, "Communication tunnel does not exist for : " + clients[id].application_name + '(' + id + ')/' + index)
       }
     }
   }
@@ -101,7 +94,12 @@ let getClientIdentifier = (ws) => {
 
 //clear up client
 let clearUp = (name, id, index) => {
-  logger.log(processType, "Will delete disconnected application after 10 minutes: " + name + '(' + id + ')/' + index)
+  logger.log(processType, "Schedule to delete disconnected application after 10 minutes: " + name + '(' + id + ')/' + index)
+  clients[id].application_instances[index].status = 'unknown'
+  clients[id].application_instances[index].updating = false
+  clients[id].application_instances[index].updatingError = false
+  clients[id].application_instances[index].version = undefined
+  clients[id].application_instances[index].errorMsg = undefined
   clients[id].application_instances[index].timer = setTimeout(
     () => {
       logger.log(processType, "Deleting application: " + name + '(' + id + ')/' + index)
@@ -120,11 +118,6 @@ app.ws('/notify', function (ws, req) {
     var client = getClientIdentifier(ws)
     if (client != undefined) {
       msg = client.name + '(' + client.id + ')/' + client.index
-      clients[client.id].application_instances[client.index].status = 'unknown'
-      clients[client.id].application_instances[client.index].updating = false
-      clients[client.id].application_instances[client.index].updatingError = false
-      clients[client.id].application_instances[client.index].version = undefined
-      clients[client.id].application_instances[client.index].errorMsg = undefined
       clearUp(client.name, client.id, client.index)
     }
     logger.error(processType, 'client connection errr: ' + err + ', client: ' + msg)
@@ -134,11 +127,6 @@ app.ws('/notify', function (ws, req) {
     var client = getClientIdentifier(ws)
     if (client != undefined) {
       msg = client.name + '(' + client.id + ')/' + client.index
-      clients[client.id].application_instances[client.index].status = 'unknown'
-      clients[client.id].application_instances[client.index].updating = false
-      clients[client.id].application_instances[client.index].updatingError = false
-      clients[client.id].application_instances[client.index].version = undefined
-      clients[client.id].application_instances[client.index].errorMsg = undefined
       clearUp(client.name, client.id, client.index)
     }
     logger.log(processType, "Client disconnected: " + msg)
@@ -200,7 +188,7 @@ app.ws('/notify', function (ws, req) {
         break
       // status update
       case msgMap['heartbeat']:
-        clients[id].application_instances[index].status = data.detail   
+        clients[id].application_instances[index].status = data.detail
         // get virus version on first time
         if (clients[id].application_instances[index].version == undefined) {
           clients[id].application_instances[index].ws.send(JSON.stringify({ "type": msgMap["version"], "identifier": identifier, "detail": '' }))
@@ -224,7 +212,7 @@ app.ws('/notify', function (ws, req) {
         } else {
           logger.debug(processType, "No version detail: " + clients[id].application_name + '(' + id + ')/' + index)
         }
-    
+
 
         break
       // virus database update
