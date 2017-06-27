@@ -20,6 +20,7 @@ let identifier = {
   instance_id: appEnv.app.instance_id
 };
 
+
 // uncomment after placing your favicon in /public
 //app.use(favicon(path.join(__dirname, 'public', 'favicon.ico')));
 app.use(bodyParser.json());
@@ -66,7 +67,7 @@ let minHeartBeatInterval = 10
 var heartbeatInterval = Math.min(maxHeartBeatInterval, config.server.heartbeatInterval)
 heartbeatInterval = Math.max(minHeartBeatInterval, heartbeatInterval)
 
-setInterval(() => {
+let heartbeatTimer = setInterval(() => {
   sendHeartBeat()
 
 }, heartbeatInterval * 1000)
@@ -403,7 +404,6 @@ app.set('port', appEnv.port);
 /**
  * Listen on provided port, on all network interfaces.
  */
-
 server.on('error', onError);
 server.on('listening', onListening);
 server.listen(appEnv.port, appEnv.bind, function () {
@@ -450,3 +450,25 @@ function onListening() {
     ? 'pipe ' + addr
     : 'port ' + addr.port;
 }
+
+
+let exitHandler = (e)=>{
+  clearInterval(heartbeatTimer)
+   for (var id of Object.keys(clients)) {
+    for (var index of Object.keys(clients[id].application_instances)) {
+      if(clients[id].application_instances[index].timer != undefined){
+        clearTimeout(clients[id].application_instances[index].timer)
+
+      }
+    }
+  }
+  logger.log(processType, "Program exit.") 
+  if(e){
+    logger.error(processType,e)
+  }
+}
+process.on('SIGINT',exitHandler)
+
+process.on('exit',exitHandler)
+
+process.on('uncaughtException',exitHandler)
