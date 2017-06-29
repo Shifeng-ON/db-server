@@ -115,7 +115,7 @@ let clearUp = (name, id, index) => {
       , 600000)
     clients[id].application_instances[index].timer.unref()
   }
-  
+
 
 }
 // websocket endpoint 
@@ -212,9 +212,11 @@ app.ws('/notify', function (ws, req) {
         if (data.detail != undefined) {
           clients[id].application_instances[index].version = Object.assign({}, data.detail)
           if (clients[id].application_instances[index].version != undefined) {
-            logger.debug(processType, "Receiving version " + clients[id].application_instances[index].version.version + " : " + clients[id].application_name + '(' + id + ')/' + index)
-          } else {
-            logger.debug(processType, clients[id].application_instances[index].version.errorMsg + " : " + clients[id].application_name + '(' + id + ')/' + index)
+            if (clients[id].application_instances[index].version.version != undefined) {
+              logger.debug(processType, "Receiving version " + clients[id].application_instances[index].version.version + " : " + clients[id].application_name + '(' + id + ')/' + index)
+            } else {
+              logger.debug(processType, clients[id].application_instances[index].version.errorMsg + " : " + clients[id].application_name + '(' + id + ')/' + index)
+            }
           }
 
         } else {
